@@ -1,0 +1,3 @@
+[submodule "hybrid-crs/frontend"]
+	path = hybrid-crs/frontend
+	url = https://github.com/Acervans/Hybrid-CRS-Frontend
