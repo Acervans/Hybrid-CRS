@@ -7,6 +7,7 @@ docker compose down
 sudo rmmod nvidia_uvm && sudo modprobe nvidia_uvm
 
 # Then restart the service
-docker compose up -d
+docker-compose up --force-recreate --build -d
+docker image prune -f
 
 cd -

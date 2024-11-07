@@ -12,5 +12,5 @@ wg-quick up ./tunnel.conf
 wg-quick down ./tunnel.conf
 
 # Other alternatives:
-    # https://theboroer.github.io/localtunnel-www/
+    # https://theboroer.github.io/localtunnel-www/ /usr/bin/lt --port {PORT}
     # Cloudflare Tunnels
