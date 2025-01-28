@@ -1,0 +1,39 @@
+data_path: ./datasets
+# dataset_save_path: saved/lastfm_recbole-dataset.pth
+# dataset: lastfm_recbole
+
+seed: 2025
+use_gpu: false
+device: cpu
+
+# Dataset config
+# load_col:
+#   inter: [user_id, item_id, rating, timestamp]
+#   item: [item_id]
+#   user: [user_id]
+
+# numerical_features: [v, a, d, stsc]
+
+USER_ID_FIELD: user_id
+ITEM_ID_FIELD: item_id
+normalize_all: True
+
+# Training and evaluation config
+epochs: 1
+train_batch_size: 2048
+eval_batch_size: 2048
+
+train_neg_sample_args: 
+  distribution: uniform
+  sample_num: 1
+
+eval_args:
+  split: {'RS': [0.8,0.1,0.1]}
+  order: RO
+  group_by: user
+  # mode: uni100
+  mode: full
+
+metrics: [Recall, MRR, NDCG, MAP, Precision]
+topk: 10
+valid_metric: NDCG@10

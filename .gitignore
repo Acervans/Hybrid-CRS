@@ -1,3 +1,9 @@
+**/qdrant_storage/*
+**/falkordb_storage/*
+**/recsys/datasets/*
+**/recsys/recsys/*
+**/recsys/log*
+
 tunnel.conf
 
 # Remove after latex cleanup
