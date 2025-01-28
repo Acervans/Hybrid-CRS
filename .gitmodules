@@ -1,3 +1,6 @@
 [submodule "hybrid-crs/frontend"]
 	path = hybrid-crs/frontend
 	url = https://github.com/Acervans/Hybrid-CRS-Frontend
+[submodule "thesis"]
+	path = thesis
+	url = https://github.com/Acervans/Hybrid-CRS-Thesis
