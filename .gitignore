@@ -2,6 +2,7 @@
 **/falkordb_storage/*
 **/recsys/datasets/*
 **/recsys/log*
+.vscode
 
 tunnel.conf
 
