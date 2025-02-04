@@ -13,13 +13,15 @@ from llama_index.core.graph_stores.types import EntityNode, ChunkNode, Relation
 import pandas as pd
 import nest_asyncio
 
+CTX_WINDOW = 16384
+
 nest_asyncio.apply()
 
 Settings.embed_model = FastEmbedEmbedding(model_name="BAAI/bge-base-en-v1.5")
 # Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-base-en-v1.5")
 
 # ollama
-Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=360.0, temperature=0.0)
+Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=360.0, temperature=0.0, context_window=CTX_WINDOW)
 
 # documents = SimpleDirectoryReader("../recsys/datasets/samples").load_data()
 

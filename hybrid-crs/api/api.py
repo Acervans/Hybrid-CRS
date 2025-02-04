@@ -5,6 +5,7 @@ import json
 from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
 from fastapi.responses import Response, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
@@ -12,7 +13,9 @@ from llama_index.core.base.llms.types import ChatMessage
 
 sys.path.append("..")  # For modular development
 
+OLLAMA_API_URL = "http://127.0.0.1:11434/api"
 REQUEST_TIMEOUT = 120.0
+
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 
 
@@ -23,7 +26,7 @@ async def ollama_api_proxy(
     method: str, endpoint: str, request: Request, response: Response
 ):
     # Reverse proxy for Ollama API
-    url: str = f"http://127.0.0.1:11434/api/{endpoint}"
+    url: str = f"{OLLAMA_API_URL}/{endpoint}"
     body: bytes = await request.body()
 
     async def streaming_response():
@@ -33,8 +36,6 @@ async def ollama_api_proxy(
                 url=url,
                 data=body,
                 params=request.query_params,
-                headers=request.headers,
-                cookies=request.cookies,
                 timeout=REQUEST_TIMEOUT,
             ) as stream_response:
                 if stream_response.status_code != 200:
@@ -46,7 +47,7 @@ async def ollama_api_proxy(
                 async for chunk in stream_response.aiter_bytes():
                     yield chunk
 
-    if json.loads(body).get("stream", True):
+    if len(body) > 0 and json.loads(body).get("stream", True):
         # Streaming reponse
         return StreamingResponse(streaming_response())
     else:
@@ -58,8 +59,6 @@ async def ollama_api_proxy(
                     url=url,
                     data=body,
                     params=request.query_params,
-                    headers=request.headers,
-                    cookies=request.cookies,
                     timeout=REQUEST_TIMEOUT,
                 )
                 response.body = proxy.content
@@ -74,7 +73,26 @@ async def ollama_api_proxy(
 
 ### API DEFINITION ###
 
-app = FastAPI()
+app = FastAPI(
+    title="HybridCRS API",
+    summary="Application Programming Interface for the HybridCRS Platform",
+)
+
+# NOTE add frontend deployed url
+allowed_origins = [
+    "http://localhost:3000",  # Dev
+    "http://localhost:3001",  # Dev
+    "http://192.168.1.142:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 
 @app.get("/")
