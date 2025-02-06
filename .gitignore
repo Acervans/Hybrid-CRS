@@ -1,6 +1,7 @@
 **/qdrant_storage/*
 **/falkordb_storage/*
 **/recsys/datasets/*
+**/recsys/saved/*
 **/recsys/log*
 .vscode
 
