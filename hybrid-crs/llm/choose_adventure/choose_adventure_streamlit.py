@@ -186,7 +186,7 @@ if __name__ == "__main__":
     from llama_index.llms.ollama import Ollama
 
     llm = Settings.llm = Ollama(
-        model="qwen2.5:3b", request_timeout=30.0, temperature=0.75
+        model="qwen2.5:3b", request_timeout=30.0, temperature=0.75, context_window=16384
     )
 
     asyncio.run(main(llm))

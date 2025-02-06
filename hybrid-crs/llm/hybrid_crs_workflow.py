@@ -2,6 +2,8 @@ import uuid
 import asyncio
 from typing import List, Optional, Dict, Any
 
+from llama_index.core import Settings
+from llama_index.llms.ollama import Ollama
 from llama_index.core.bridge.pydantic import BaseModel, Field
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.workflow import (
@@ -18,6 +20,11 @@ from llama_index.retrievers import ChromaDBRetriever
 
 
 # Constants
+CTX_WINDOW = 16384
+
+# ollama
+Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=360.0, context_window=CTX_WINDOW)
+
 QUESTION_TEMPLATE = """
 Based on the dataset with the following metadata: {metadata}, what are you interested in?
 """

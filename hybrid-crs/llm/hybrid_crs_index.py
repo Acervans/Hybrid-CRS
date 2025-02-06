@@ -11,10 +11,12 @@ from llama_index.core.ingestion import IngestionPipeline, IngestionCache
 import qdrant_client
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 
+CTX_WINDOW = 16384
+
 Settings.embed_model = FastEmbedEmbedding(model_name="BAAI/bge-base-en-v1.5")
 
 # ollama
-Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=360.0)
+Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=360.0, context_window=CTX_WINDOW)
 
 # Create a Qdrant client and collection
 client = qdrant_client.QdrantClient(
