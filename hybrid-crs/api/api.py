@@ -119,3 +119,8 @@ async def ollama_api_get(endpoint: str, request: Request, response: Response):
 @app.post("/ollama/api/{endpoint}")
 async def ollama_api_post(endpoint: str, request: Request, response: Response):
     return await ollama_api_proxy("POST", endpoint, request, response)
+
+
+@app.delete("/ollama/api/{endpoint}")
+async def ollama_api_post(endpoint: str, request: Request, response: Response):
+    return await ollama_api_proxy("DELETE", endpoint, request, response)
