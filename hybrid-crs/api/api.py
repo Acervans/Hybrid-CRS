@@ -1,15 +1,15 @@
 import sys
 import httpx
 import json
+import pymupdf
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.requests import Request
 from fastapi.responses import Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
-from llama_index.core.base.llms.types import ChatMessage
 
 sys.path.append("..")  # For modular development
 
@@ -100,27 +100,38 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.get("/chat")
-async def stream_llm():
-    gen = (
-        response.delta
-        for response in Settings.llm.stream_chat(
-            [ChatMessage(role="user", content="Hello")]
-        )
-    )
-    return StreamingResponse(gen)
-
-
 @app.get("/ollama/api/{endpoint}")
 async def ollama_api_get(endpoint: str, request: Request, response: Response):
+    """GET Proxy for Ollama API requests"""
     return await ollama_api_proxy("GET", endpoint, request, response)
 
 
 @app.post("/ollama/api/{endpoint}")
 async def ollama_api_post(endpoint: str, request: Request, response: Response):
+    """POST Proxy for Ollama API requests"""
     return await ollama_api_proxy("POST", endpoint, request, response)
 
 
 @app.delete("/ollama/api/{endpoint}")
-async def ollama_api_post(endpoint: str, request: Request, response: Response):
+async def ollama_api_delete(endpoint: str, request: Request, response: Response):
+    """DELETE Proxy for Ollama API requests"""
     return await ollama_api_proxy("DELETE", endpoint, request, response)
+
+
+@app.post("/pdf-to-text")
+async def pdf_to_text(file: UploadFile):
+    """Extracts readable text from a PDF `file`
+
+    - Args:
+        - file (UploadFile): PDF file
+
+    - Returns:
+        - Response: response with extracted text
+    """
+    doc = pymupdf.open(stream=file.file.read(), filetype="pdf")
+
+    text = ""
+    for page in doc:
+        text += page.get_text() + "\n"
+
+    return Response(text)
