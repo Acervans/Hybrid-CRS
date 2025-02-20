@@ -19,58 +19,6 @@ REQUEST_TIMEOUT = 120.0
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 
 
-### UTILITY FUNCTIONS ###
-
-
-async def ollama_api_proxy(
-    method: str, endpoint: str, request: Request, response: Response
-):
-    # Reverse proxy for Ollama API
-    url: str = f"{OLLAMA_API_URL}/{endpoint}"
-    body: bytes = await request.body()
-
-    async def streaming_response():
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                method=method,
-                url=url,
-                data=body,
-                params=request.query_params,
-                timeout=REQUEST_TIMEOUT,
-            ) as stream_response:
-                if stream_response.status_code != 200:
-                    response_text = await stream_response.aread()
-                    raise HTTPException(
-                        status_code=stream_response.status_code,
-                        detail=response_text.decode(),
-                    )
-                async for chunk in stream_response.aiter_bytes():
-                    yield chunk
-
-    if len(body) > 0 and json.loads(body).get("stream", True):
-        # Streaming reponse
-        return StreamingResponse(streaming_response())
-    else:
-        # Non-streaming response
-        async with httpx.AsyncClient() as client:
-            try:
-                proxy = await client.request(
-                    method=method,
-                    url=url,
-                    data=body,
-                    params=request.query_params,
-                    timeout=REQUEST_TIMEOUT,
-                )
-                response.body = proxy.content
-                response.status_code = proxy.status_code
-                return response
-            except httpx.ReadTimeout:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Request took too long to generate a response",
-                )
-
-
 ### API DEFINITION ###
 
 app = FastAPI(
@@ -100,22 +48,62 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.get("/ollama/api/{endpoint}")
-async def ollama_api_get(endpoint: str, request: Request, response: Response):
-    """GET Proxy for Ollama API requests"""
-    return await ollama_api_proxy("GET", endpoint, request, response)
+@app.api_route("/ollama/api/{endpoint}", methods=["GET", "POST", "DELETE"])
+async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
+    """Proxy for Ollama API requests
 
+    - Args:
+        - endpoint (str): Ollama API endpoint
+        - request (Request): Request object with request data
+        - response (Response): Response object with partial response
 
-@app.post("/ollama/api/{endpoint}")
-async def ollama_api_post(endpoint: str, request: Request, response: Response):
-    """POST Proxy for Ollama API requests"""
-    return await ollama_api_proxy("POST", endpoint, request, response)
+    - Returns:
+        - StreamingResponse | Response: response to Ollama API call
+    """
+    # Reverse proxy for Ollama API
+    url: str = f"{OLLAMA_API_URL}/{endpoint}"
+    body: bytes = await request.body()
 
+    async def streaming_response():
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                method=request.method,
+                url=url,
+                data=body,
+                params=request.query_params,
+                timeout=REQUEST_TIMEOUT,
+            ) as stream_response:
+                if stream_response.status_code != 200:
+                    response_text = await stream_response.aread()
+                    raise HTTPException(
+                        status_code=stream_response.status_code,
+                        detail=response_text.decode(),
+                    )
+                async for chunk in stream_response.aiter_bytes():
+                    yield chunk
 
-@app.delete("/ollama/api/{endpoint}")
-async def ollama_api_delete(endpoint: str, request: Request, response: Response):
-    """DELETE Proxy for Ollama API requests"""
-    return await ollama_api_proxy("DELETE", endpoint, request, response)
+    if len(body) > 0 and json.loads(body).get("stream", True):
+        # Streaming reponse
+        return StreamingResponse(streaming_response())
+    else:
+        # Non-streaming response
+        async with httpx.AsyncClient() as client:
+            try:
+                proxy = await client.request(
+                    method=request.method,
+                    url=url,
+                    data=body,
+                    params=request.query_params,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                response.body = proxy.content
+                response.status_code = proxy.status_code
+                return response
+            except httpx.ReadTimeout:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Request took too long to generate a response",
+                )
 
 
 @app.post("/pdf-to-text")
