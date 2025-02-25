@@ -3,6 +3,7 @@ import httpx
 import json
 import pymupdf
 import html2text
+import asyncio
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.requests import Request
@@ -16,6 +17,7 @@ from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
 html2text.config.IMAGES_TO_ALT = True
+html2text.config.BODY_WIDTH = 0
 
 sys.path.append("..")  # For modular development
 
@@ -31,39 +33,60 @@ Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 ### UTILITY FUNCTIONS ###
 
 
+async def scrape_search_result(
+    result: dict, rank: int, client: httpx.AsyncClient, timeout=WEB_SEARCH_TIMEOUT
+) -> dict | None:
+    """Scrapes the website content of a search `result`
+
+    - Args:
+        - result (dict): Dictionary with search result data
+        - rank (int): Rank of the search result
+        - client (httpx.AsyncClient): HTTP client
+        - timeout (float): Request timeout
+
+    - Returns:
+        - dict: result data with scraped content
+        - None: if exception occurs
+    """
+    try:
+        response = await client.get(result["href"], timeout=timeout)
+    except (httpx.TimeoutException, httpx.RemoteProtocolError):
+        return None
+    return {
+        "rank": rank,
+        "title": result["title"],
+        "description": result["body"],
+        "url": result["href"],
+        "content": html2text.html2text(response.text),
+    }
+
+
 async def web_search(
     query: str, timeout=WEB_SEARCH_TIMEOUT, max_results=WEB_SEARCH_RESULTS
-):
+) -> list[dict]:
     """Searches the web for `query`
 
     - Args:
         - query (str): Search query
 
     - Returns:
-        - list: search results
+        - list[dict]: search results
     """
     ddgs = DDGS(timeout=timeout)
-
-    scraped_results = []
     try:
         results = ddgs.text(query, max_results=max_results, safesearch="moderate")
-        for i, result in enumerate(results, 1):
-            try:
-                response = httpx.get(result["href"], timeout=timeout // 2)
-                scraped_results.append(
-                    {
-                        "rank": i,
-                        "title": result["title"],
-                        "description": result["body"],
-                        "url": result["href"],
-                        "content": html2text.html2text(response.text),
-                    }
-                )
-            except (httpx.TimeoutException, httpx.RemoteProtocolError):
-                continue
+        async with httpx.AsyncClient() as client:
+            tasks = [
+                scrape_search_result(result, rank, client, timeout)
+                for rank, result in enumerate(results, 1)
+            ]
+            final_results = sorted(
+                filter(None, await asyncio.gather(*tasks)), key=lambda x: x["rank"]
+            )
+
+            return final_results
     except DuckDuckGoSearchException:
         return ["Failed to search the web"]
-    return scraped_results
 
 
 ### API DEFINITION ###
@@ -117,7 +140,7 @@ async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
         web_results = await web_search(context_body["messages"][-1]["content"])
         context_body["messages"][-1][
             "content"
-        ] += f"\n\nUsing a web search obtained these results: \n{web_results}"
+        ] += f"\n\nWeb search obtained these results, CITE THE SOURCES: \n{web_results}"
         body = json.dumps(context_body).encode("utf-8")
 
     async def streaming_response():
