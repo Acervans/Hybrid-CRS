@@ -2,6 +2,7 @@ import sys
 import httpx
 import json
 import pymupdf
+import html2text
 
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.requests import Request
@@ -11,12 +12,58 @@ from fastapi.middleware.cors import CORSMiddleware
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
 
+from duckduckgo_search import DDGS
+from duckduckgo_search.exceptions import DuckDuckGoSearchException
+
+html2text.config.IMAGES_TO_ALT = True
+
 sys.path.append("..")  # For modular development
 
 OLLAMA_API_URL = "http://127.0.0.1:11434/api"
 REQUEST_TIMEOUT = 120.0
 
+WEB_SEARCH_TIMEOUT = 10
+WEB_SEARCH_RESULTS = 3
+
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
+
+
+### UTILITY FUNCTIONS ###
+
+
+async def web_search(
+    query: str, timeout=WEB_SEARCH_TIMEOUT, max_results=WEB_SEARCH_RESULTS
+):
+    """Searches the web for `query`
+
+    - Args:
+        - query (str): Search query
+
+    - Returns:
+        - list: search results
+    """
+    ddgs = DDGS(timeout=timeout)
+
+    scraped_results = []
+    try:
+        results = ddgs.text(query, max_results=max_results, safesearch="moderate")
+        for i, result in enumerate(results, 1):
+            try:
+                response = httpx.get(result["href"], timeout=timeout // 2)
+                scraped_results.append(
+                    {
+                        "rank": i,
+                        "title": result["title"],
+                        "description": result["body"],
+                        "url": result["href"],
+                        "content": html2text.html2text(response.text),
+                    }
+                )
+            except (httpx.TimeoutException, httpx.RemoteProtocolError):
+                continue
+    except DuckDuckGoSearchException:
+        return ["Failed to search the web"]
+    return scraped_results
 
 
 ### API DEFINITION ###
@@ -63,6 +110,15 @@ async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
     # Reverse proxy for Ollama API
     url: str = f"{OLLAMA_API_URL}/{endpoint}"
     body: bytes = await request.body()
+
+    # Perform Web Search with DuckDuckGo
+    if request.headers.get("websearch") == "true":
+        context_body = json.loads(body)
+        web_results = await web_search(context_body["messages"][-1]["content"])
+        context_body["messages"][-1][
+            "content"
+        ] += f"\n\nUsing a web search obtained these results: \n{web_results}"
+        body = json.dumps(context_body).encode("utf-8")
 
     async def streaming_response():
         async with httpx.AsyncClient() as client:
