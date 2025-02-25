@@ -25,7 +25,7 @@ OLLAMA_API_URL = "http://127.0.0.1:11434/api"
 REQUEST_TIMEOUT = 120.0
 
 WEB_SEARCH_TIMEOUT = 10
-WEB_SEARCH_RESULTS = 3
+WEB_SEARCH_RESULTS = 2
 
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 
