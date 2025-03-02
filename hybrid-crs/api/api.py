@@ -22,6 +22,7 @@ html2text.config.BODY_WIDTH = 0
 sys.path.append("..")  # For modular development
 
 OLLAMA_API_URL = "http://127.0.0.1:11434/api"
+OLLAMA_API_PROXY = "/ollama/api/{endpoint}"
 REQUEST_TIMEOUT = 120.0
 
 WEB_SEARCH_TIMEOUT = 10
@@ -118,7 +119,9 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.api_route("/ollama/api/{endpoint}", methods=["GET", "POST", "DELETE"])
+@app.get(OLLAMA_API_PROXY)
+@app.post(OLLAMA_API_PROXY)
+@app.delete(OLLAMA_API_PROXY)
 async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
     """Proxy for Ollama API requests
 
