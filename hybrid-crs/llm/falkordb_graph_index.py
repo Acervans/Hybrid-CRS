@@ -10,7 +10,7 @@ from llama_index.core.ingestion import IngestionPipeline, IngestionCache
 from llama_index.graph_stores.falkordb import FalkorDBPropertyGraphStore
 from llama_index.core.graph_stores.types import EntityNode, ChunkNode, Relation
 
-import pandas as pd
+import fireducks.pandas as pd
 import nest_asyncio
 
 CTX_WINDOW = 16384
