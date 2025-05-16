@@ -1,11 +1,15 @@
+import os
 import sys
+import jwt
 import httpx
 import json
 import pymupdf
 import html2text
 import asyncio
+import dotenv
+import falkordb
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile, Depends
 from fastapi.requests import Request
 from fastapi.responses import Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +19,8 @@ from llama_index.llms.ollama import Ollama
 
 from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
+
+dotenv.load_dotenv()
 
 html2text.config.IMAGES_TO_ALT = True
 html2text.config.BODY_WIDTH = 0
@@ -27,6 +33,8 @@ REQUEST_TIMEOUT = 120.0
 
 WEB_SEARCH_TIMEOUT = 10
 WEB_SEARCH_RESULTS = 2
+
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 
@@ -117,6 +125,26 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+
+@app.middleware("http")
+async def verify_jwt(request: Request, call_next):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+
+    token = auth_header.split(" ")[1]
+    try:
+        # TODO # Extract user ID/email, role and restrict access to specific endpoints
+        payload = jwt.decode(jwt=token, key=SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        request.state.jwt = payload
+
+        response = await call_next(request)
+        return response
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except (jwt.InvalidSignatureError, jwt.InvalidTokenError, jwt.DecodeError):
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 @app.get(OLLAMA_API_PROXY)
