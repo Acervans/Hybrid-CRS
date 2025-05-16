@@ -14,6 +14,7 @@ from tqdm import trange
 TIMEOUT = 5 * 1000 * 60  # 5 minutes
 MIN_R = 10  # Min rating count to be considered reliable
 
+
 class FalkorDBRecommender:
     def __init__(
         self,
@@ -64,7 +65,9 @@ class FalkorDBRecommender:
 
         # Ingest nodes & edges from CSV if empty
         if empty:
-            self.inter_df = pd.read_csv(f"{dataset_dir}/{dataset_name}/{dataset_name}.inter", sep=sep)
+            self.inter_df = pd.read_csv(
+                f"{dataset_dir}/{dataset_name}/{dataset_name}.inter", sep=sep
+            )
             try:
                 self.users_df = pd.read_csv(
                     f"{dataset_dir}/{dataset_name}/{dataset_name}.user", sep=sep
@@ -238,11 +241,11 @@ class FalkorDBRecommender:
     def recommend_contextual(
         self,
         user_id: Any,
-        item_props: Dict[str, Any],
+        item_props: Dict[str, Any] = {},
         top_n: int = 10,
         context_weight: float = 0.5,
-        score_weight: float = 0.3,
-        pagerank_weight: float = 0.2,
+        score_weight: float = 0.35,
+        pagerank_weight: float = 0.15,
     ) -> List[Tuple[Any, float]]:
         """
         Contextual recommendations using soft feature overlap + weighted rating score and PageRank.
@@ -269,9 +272,13 @@ class FalkorDBRecommender:
                 conditions.extend((f"itm.{k} {op} '{x}'" for x in v))
             else:
                 conditions.append(f"itm.{k} {op} '{v}'")
-        or_expr = " OR ".join(conditions)
-        score_expr = " + ".join(
-            f"CASE WHEN {condition} THEN 1 ELSE 0 END" for condition in conditions
+        or_expr = f"({" OR ".join(conditions)})" if conditions else "True"
+        score_expr = (
+            " + ".join(
+                f"CASE WHEN {condition} THEN 1 ELSE 0 END" for condition in conditions
+            )
+            if conditions
+            else 0
         )
 
         # Exclude seen items
@@ -374,7 +381,7 @@ class FalkorDBRecommender:
     def recommend_hybrid(
         self,
         user_id: Any,
-        item_props: Dict[str, Any],
+        item_props: Dict[str, Any] = {},
         k: int = 5,
         top_n: int = 10,
     ) -> List[Tuple[Any, float]]:
@@ -524,7 +531,7 @@ class FalkorDBRecommender:
 if __name__ == "__main__":
     datasets_folder = "../data_processing/datasets/processed"
     dataset = "ml-10m"
-    frec = FalkorDBRecommender(datasets_folder, dataset, clear=True)
+    frec = FalkorDBRecommender(datasets_folder, dataset, clear=False)
 
     res = frec.get_unique_feat_values("Item", "category")
     print(res)
@@ -534,8 +541,8 @@ if __name__ == "__main__":
         item_props={"category": ["Animation", "Action"]},
         top_n=10,
         context_weight=0.5,
-        score_weight=0.3,
-        pagerank_weight=0.2,
+        score_weight=0.35,
+        pagerank_weight=0.15,
     )
     for node, score in res:
         print(node, score)

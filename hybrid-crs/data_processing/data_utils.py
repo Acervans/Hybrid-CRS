@@ -26,7 +26,7 @@ DATATYPE_TEMPLATE = (
     "'float_seq' (SEQUENCE of continuous values)."
 )
 USER_HEADERS_TEMPLATE = "From these user table headers, discern which correspond to user id. Do NOT exclude suffixes."
-ITEM_HEADERS_TEMPLATE = "From these item table headers, discern which correspond to item id, name and category. Do NOT exclude suffixes."
+ITEM_HEADERS_TEMPLATE = "From these item table headers, discern which correspond to item id, name and category (optional). Do NOT exclude suffixes."
 INTER_HEADERS_TEMPLATE = "From these interaction table headers, discern which correspond to user id, item id, and rating. Do NOT exclude suffixes."
 
 USER_ID_COL = "user_id:token"
@@ -45,7 +45,7 @@ class UserHeaders(BaseModel):
 class ItemHeaders(BaseModel):
     item_id_column: str
     name_column: str
-    category_column: str
+    category_column: str | None
 
 
 class InterHeaders(BaseModel):
@@ -208,13 +208,17 @@ def process_dataset(
         if item_headers is None:
             item_headers = get_item_headers(items_df.columns)
 
-        seq_cat = item_headers.category_column.endswith("token_seq")
+        rename_cols = {
+            item_headers.item_id_column: ITEM_ID_COL,
+            item_headers.name_column: ITEM_NAME_COL,
+        }
+        if item_headers.category_column is not None:
+            is_seq = item_headers.category_column.endswith("token_seq")
+            rename_cols[item_headers.category_column] = (
+                f"{ITEM_CATEGORY_COL}:{"token_seq" if is_seq else "token"}"
+            )
         items_df.rename(
-            columns={
-                item_headers.item_id_column: ITEM_ID_COL,
-                item_headers.name_column: ITEM_NAME_COL,
-                item_headers.category_column: f"{ITEM_CATEGORY_COL}:{"token_seq" if seq_cat else "token"}",
-            },
+            columns=rename_cols,
             inplace=True,
         )
     except FileNotFoundError:
@@ -249,6 +253,10 @@ if __name__ == "__main__":
     assert item_headers.item_id_column == "iid:token"
     assert item_headers.name_column == "movie_title:token_seq"
     assert item_headers.category_column == "genre:token"
+
+    assert (
+        get_item_headers(["iid:token", "movie_title:token_seq"]).category_column == None
+    )
 
     user_headers = get_user_headers(
         ["USER_IDENTIFICATION:token", "USER_AGE:float", "USER_NAME:token"]
