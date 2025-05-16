@@ -22,3 +22,9 @@ ngrok http --url=https://perfectly-large-goshawk.ngrok-free.app 8000
 curl https://tunnel.pyjam.as/{PORT} > tunnel.conf && wg-quick up ./tunnel.conf
 wg-quick up ./tunnel.conf
 wg-quick down ./tunnel.conf
+
+
+### Update core Python libraries ###
+pip install --upgrade ollama llama-index llama-cloud llama-cloud-services llama-index-cli llama-index-embeddings-ollama \
+    llama-index-embeddings-fastembed llama-index-embeddings-huggingface llama-index-embeddings-openai llama-index-graph-stores-falkordb \
+    llama-index-indices-managed-llama-cloud llama-index-llms-ollama llama-parse streamlit fireducks fastapi html2text pymupdf falkordb

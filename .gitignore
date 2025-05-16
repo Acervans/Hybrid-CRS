@@ -1,3 +1,6 @@
+hybrid-crs/data_processing/datasets/raw/**/
+hybrid-crs/data_processing/datasets/processed/**/
+
 **/qdrant_storage/*
 **/falkordb_storage/*
 **/recsys/datasets/*
