@@ -18,8 +18,8 @@ MIN_R = 10  # Min rating count to be considered reliable
 class FalkorDBRecommender:
     def __init__(
         self,
-        dataset_dir: str,
         dataset_name: str,
+        dataset_dir: str,
         host: str = "localhost",
         port: int = 6379,
         username: Optional[str] = None,
@@ -30,10 +30,10 @@ class FalkorDBRecommender:
         Connect to FalkorDB, select (or create) graph, and ingest the dataset.
 
         Args:
-            dataset_dir (str): folder containing directory with {dataset_name}.user, .item, .inter CSVs
-            dataset_name (str): prefix of CSV file names and graph name in FalkorDB
+            dataset_name (str): Name of the dataset. Prefix of CSV file names and graph name in FalkorDB
+            dataset_dir (str): Folder containing directory with {dataset_name}.user, .item, .inter CSVs
             host,port,username,password: FalkorDB connection params
-            clear (bool): whether to clear existing data from FalkorDB
+            clear (bool): Whether to clear existing data from FalkorDB
         """
         self.dataset_name = dataset_name
 
@@ -128,12 +128,29 @@ class FalkorDBRecommender:
             "MATCH ()-[r:RATED]->() RETURN avg(r.rating) AS glb_avg"
         ).result_set[0][0]
 
-    def _process_columns(self, df):
+    def _process_columns(self, df: pd.DataFrame) -> Dict[str, str]:
+        """
+        Renames columns of a DataFrame without the datatype suffixes,
+        returns a dict mapping each feature to its datatype.
+
+        Args:
+            df (pd.DataFrame): DataFrame to be processed
+
+        Returns:
+            Dict[str, str]: Mapping of feature to datatype
+        """
         feats = {x[0]: x[1] for col in df.columns if (x := col.split(":"))}
         df.columns = [col.split(":")[0] for col in df.columns]
         return feats
 
-    def _ingest(self, batch_size: int = 250_000):
+    def _ingest(self, batch_size: int = 250_000) -> None:
+        """
+        Ingests users, items and ratings with their respective features as properties.
+        Users and items are treated as entities, whereas ratings as RATED relationships.
+
+        Args:
+            batch_size (int): Batch size for ingestion of ratings
+        """
         # Create indices for fast lookup
         self.g.query("CREATE INDEX ON :User(user_id)")
         self.g.query("CREATE INDEX ON :Item(item_id)")
@@ -188,7 +205,14 @@ class FalkorDBRecommender:
         self, label: Literal["User", "Item", "RATED"], feat: str
     ) -> List[Any]:
         """
-        Return list of unique feature values
+        Gets the unique values of a feature for a given label.
+
+        Args:
+            label (Literal["User", "Item", "RATED"]): Entity/relationship that has feature `feat`
+            feat (str): Feature to get the unique values from
+
+        Returns:
+            List[Any]: List of unique values of `feat` for `label`
         """
         is_relationship = False
         if label == "User":
@@ -218,7 +242,13 @@ class FalkorDBRecommender:
 
     def get_items_by_user(self, user_id: Any) -> List[Any]:
         """
-        Return list of item_ids a user has interacted with.
+        Gets the list of item IDs a user has interacted with.
+
+        Args:
+            user_id (Any): ID of user to query
+
+        Returns:
+            List[Any]: List of item IDs
         """
         q = (
             f"MATCH (u:User {{user_id: {user_id}}})-[r:RATED]->(i:Item) "
@@ -229,7 +259,13 @@ class FalkorDBRecommender:
 
     def get_users_by_item(self, item_id: Any) -> List[Any]:
         """
-        Return list of user_ids who interacted with an item.
+        Gets the list of user IDs who interacted with an item.
+
+        Args:
+            item_id (Any): ID of item to query
+
+        Returns:
+            List[Any]: List of user IDs
         """
         q = (
             f"MATCH (u:User)-[r:RATED]->(i:Item {{item_id: {item_id}}}) "
@@ -242,24 +278,24 @@ class FalkorDBRecommender:
         self,
         user_id: Any,
         item_props: Dict[str, Any] = {},
-        top_n: int = 10,
         context_weight: float = 0.5,
         score_weight: float = 0.35,
         pagerank_weight: float = 0.15,
+        top_n: int = 10,
     ) -> List[Tuple[Any, float]]:
         """
         Contextual recommendations using soft feature overlap + weighted rating score and PageRank.
 
         Args:
-            user_id (Any): id of target user (to exclude seen items)
+            user_id (Any): ID of target user
             item_props (Dict[str, Any]): e.g. {'category': 'Books'}
-            top_n (int): number of recs to return
-            context_weight (float): weight for number of matching features
-            score_weight (float): weight for weighted score (rating + popularity)
-            pagerank_weight (float): weight for PageRank score
+            context_weight (float): Weight for number of matching features
+            score_weight (float): Weight for weighted score (rating + popularity)
+            pagerank_weight (float): Weight for PageRank score
+            top_n (int): Number of items to recommend
 
         Returns:
-            List[Tuple[Any, float]]: ranked pairs of item, score
+            List[Tuple[Any, float]]: Ranked pairs of item, score
         """
         # OR clause + CASE condition checking
         conditions = []
@@ -272,7 +308,7 @@ class FalkorDBRecommender:
                 conditions.extend((f"itm.{k} {op} '{x}'" for x in v))
             else:
                 conditions.append(f"itm.{k} {op} '{v}'")
-        or_expr = f"({" OR ".join(conditions)})" if conditions else "True"
+        or_expr = f"({" OR ".join(conditions)})" if conditions else "true"
         score_expr = (
             " + ".join(
                 f"CASE WHEN {condition} THEN 1 ELSE 0 END" for condition in conditions
@@ -327,19 +363,19 @@ class FalkorDBRecommender:
         return scores[:top_n]
 
     def recommend_cf(
-        self, user_id: Any, top_n: int = 10, min_rating: float = 3.0, k: int = 10
+        self, user_id: Any, min_rating: float = 3.0, k: int = 10, top_n: int = 10
     ) -> List[Tuple[Any, float]]:
         """
-        Collaborative filtering using only FalkorDB graph queries.
+        Collaborative filtering using FalkorDB graph queries.
 
         Args:
-            user_id (Any): target user
-            top_n (int): number of items to recommend
-            min_rating (float): minimum rating threshold to consider items as liked
-            k (int): number of nearest neighbors to consider
+            user_id (Any): ID of target user
+            min_rating (float): Minimum rating threshold to consider items as liked
+            k (int): Number of nearest neighbors to consider
+            top_n (int): Number of items to recommend
 
         Returns:
-            List[Tuple[Any, float]]: ranked pairs of item, score
+            List[Tuple[Any, float]]: Ranked pairs of item, score
         """
         # Find top-k similar users based on co-rated items
         q = (
@@ -382,15 +418,26 @@ class FalkorDBRecommender:
         self,
         user_id: Any,
         item_props: Dict[str, Any] = {},
+        min_rating: float = 3.0,
         k: int = 5,
         top_n: int = 10,
     ) -> List[Tuple[Any, float]]:
         """
         Hybrid recommendations: contextual + CF recommendations
         blend by interleaving ranks, prioritizing intersections.
+
+        Args:
+            user_id (Any): ID of target user
+            item_props (Dict[str, Any]): e.g. {'category': 'Books'} for contextual recommendations
+            min_rating (float): Minimum rating threshold to consider items as liked
+            k (int): Number of nearest neighbors to consider for CF recommendations
+            top_n (int): Number of items to recommend
+
+        Returns:
+            List[Tuple[Any, float]]: Ranked pairs of item, score
         """
         ctx = self.recommend_contextual(user_id, item_props, top_n=top_n)
-        cf = self.recommend_cf(user_id, k=k, top_n=top_n)
+        cf = self.recommend_cf(user_id, k=k, min_rating=min_rating, top_n=top_n)
         ctx_ids = set(x[0].properties["item_id"] for x in ctx)
         cf_ids = set(x[0].properties["item_id"] for x in cf)
 
@@ -419,21 +466,23 @@ class FalkorDBRecommender:
         shared_props: Optional[List[str]] = None,
         min_rating: float = 3.0,
         rating_threshold: float = 3.0,
-        top_cf_exp: int = 5,
         top_feat_exp: int = 5,
+        top_collab_exp: int = 5,
     ) -> List[str]:
         """
         Explain a recommendation from any black-box recommender using graph-based reasoning only.
 
         Args:
             user_id (Any): ID of the user for whom the item was recommended
-            item_id (Any): the recommended item
-            shared_props (Optional[List[str]]): features to check for mutual properties
-            min_rating (float): only consider RATED edges with rating >= this threshold
-            rating_threshold (float): minimum rating for general acceptance explanation
+            item_id (Any): The recommended item
+            shared_props (Optional[List[str]]): Features to check for mutual properties
+            min_rating (float): Only consider RATED edges with rating >= this threshold
+            rating_threshold (float): Minimum rating for general acceptance explanation
+            top_feat_exp (int): Number of explanations through feature similarity
+            top_collab_exp (int): Number of explanations through collaborative path evidence
 
         Returns:
-            List[str]: list of natural language explanation strings
+            List[str]: List of natural language explanation strings
         """
         explanations = []
 
@@ -484,7 +533,7 @@ class FalkorDBRecommender:
             f"WITH count(DISTINCT u2) AS numUsers, i AS item, {match_expr} AS sharesProp "
             f"RETURN numUsers, item, sharesProp "
             f"ORDER BY sharesProp, numUsers DESC "
-            f"LIMIT {top_cf_exp}"
+            f"LIMIT {top_collab_exp}"
         )
         # TODO order by user similarity if not too slow
         # TODO ORDER BY RATING SIMILARITY (abs diff) OR COSINE SIM
@@ -508,7 +557,7 @@ class FalkorDBRecommender:
                     )
                 )
 
-        # 3. Popularity of item
+        # 3. Popularity of item as general acceptance
         query_pop = (
             f"MATCH (:User)-[r:RATED]->(rec:Item {{item_id: {item_id}}}) "
             f"RETURN avg(r.rating) AS avgRating, count(r) AS totalRatings"
@@ -516,9 +565,9 @@ class FalkorDBRecommender:
         pop_result = self.g.ro_query(query_pop, timeout=TIMEOUT).result_set
         if pop_result:
             avg_rating, total = pop_result[0]
-            if avg_rating and float(avg_rating) >= rating_threshold:
+            if avg_rating and avg_rating >= rating_threshold:
                 explanations.append(
-                    f"This item has an average rating of {round(avg_rating, 2)} based on {total} user ratings."
+                    f"This item has an average rating of {round(avg_rating, 2)}/5.0 based on {total} user ratings."
                 )
 
         return (
@@ -529,9 +578,9 @@ class FalkorDBRecommender:
 
 
 if __name__ == "__main__":
-    datasets_folder = "../data_processing/datasets/processed"
     dataset = "ml-10m"
-    frec = FalkorDBRecommender(datasets_folder, dataset, clear=False)
+    datasets_folder = "../data_processing/datasets/processed"
+    frec = FalkorDBRecommender(dataset, datasets_folder, clear=False)
 
     res = frec.get_unique_feat_values("Item", "category")
     print(res)

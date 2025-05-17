@@ -1,4 +1,8 @@
-# TODO User Sniffer's dialect to extract necessary info
+""" Data processing utilities for recommendation datasets.
+    Header standardization, data cleaning, normalization and type inference.
+"""
+
+# TODO Use Sniffer's dialect to extract necessary info
 
 # TODO USER MUST INDICATE DATA TYPE OF EACH COLUMN, BUT PREVIEW WITH get_datatype
 
@@ -59,6 +63,15 @@ class DataType(BaseModel):
 
 
 def get_user_headers(headers: List[str]) -> UserHeaders:
+    """
+    Identify the user ID column from a list of user table headers using LLM inference.
+
+    Args:
+        headers (List[str]): List of column headers from the user table
+
+    Returns:
+        UserHeaders: Model containing the identified user ID column name
+    """
     response = chat(
         messages=[
             {
@@ -74,6 +87,15 @@ def get_user_headers(headers: List[str]) -> UserHeaders:
 
 
 def get_item_headers(headers: List[str]) -> ItemHeaders:
+    """
+    Identify item ID, name, and category columns from a list of item table headers using LLM inference.
+
+    Args:
+        headers (List[str]): List of column headers from the item table
+
+    Returns:
+        ItemHeaders: Model containing the identified item ID, name, and optional category column names
+    """
     response = chat(
         messages=[
             {
@@ -89,6 +111,15 @@ def get_item_headers(headers: List[str]) -> ItemHeaders:
 
 
 def get_inter_headers(headers: List[str]) -> InterHeaders:
+    """
+    Identify user ID, item ID, and rating columns from a list of interaction table headers using LLM inference.
+
+    Args:
+        headers (List[str]): List of column headers from the interaction table
+
+    Returns:
+        InterHeaders: Model containing the identified user ID, item ID, and rating column names
+    """
     response = chat(
         messages=[
             {
@@ -106,6 +137,19 @@ def get_inter_headers(headers: List[str]) -> InterHeaders:
 def get_datatype(
     sample: List[str],
 ) -> Literal["token", "token_seq", "float", "float_seq"]:
+    """
+    Determine the datatype of a sample list of values using LLM inference.
+
+    Args:
+        sample (List[str]): List of sample data values to analyze
+
+    Returns:
+        Literal["token", "token_seq", "float", "float_seq"]: The inferred datatype of the sample values
+            - token: Single discrete value
+            - token_seq: Sequence of discrete values
+            - float: Single continuous value
+            - float_seq: Sequence of continuous values
+    """
     response = chat(
         messages=[
             {
@@ -122,7 +166,18 @@ def get_datatype(
     return DataType.model_validate_json(response.message.content).datatype
 
 
-def normalize(values: np.ndarray, lower: float = 1.0, higher: float = 5.0):
+def normalize(values: np.ndarray, lower: float = 0.0, higher: float = 5.0):
+    """
+    Normalize an array of values to a specified range.
+
+    Args:
+        values (np.ndarray): Array of values to normalize
+        lower (float): Lower bound of the target range
+        higher (float): Upper bound of the target range
+
+    Returns:
+        np.ndarray: Normalized values mapped to the range [lower, higher]
+    """
     min_val = values.min()
     max_val = values.max()
 
@@ -135,6 +190,18 @@ def clean_dataframe(
     logfile: bool = False,
     verbose: bool = True,
 ) -> pd.DataFrame:
+    """
+    Clean a DataFrame using the AutoClean library, excluding specified columns.
+
+    Args:
+        dataset (pd.DataFrame): DataFrame to clean
+        except_columns (List[str]): List of column names to exclude from cleaning
+        logfile (bool): Whether to generate a log file of the cleaning operations
+        verbose (bool): Whether to print verbose output during cleaning
+
+    Returns:
+        pd.DataFrame: Cleaned DataFrame with preserved columns
+    """
     clean_cols = [col for col in dataset.columns if col not in except_columns]
     if not isinstance(dataset, pd.core.frame.DataFrame):
         dataset = dataset.to_pandas()
@@ -163,8 +230,27 @@ def process_dataset(
     user_headers: UserHeaders = None,
     item_headers: ItemHeaders = None,
     inter_headers: InterHeaders = None,
-    normalize_ratings: bool = False,
+    normalize_ratings: bool = True,
 ) -> None:
+    """
+    Process raw recommendation system datasets by identifying columns, cleaning data, and
+    standardizing the format.
+
+    Args:
+        dataset_name (str): Name of the dataset to process
+        dataset_dir (str): Directory containing raw dataset files.
+            Defaults to "./datasets/raw".
+        output_dir (str): Directory to store processed dataset files.
+            Defaults to "./datasets/processed".
+        user_headers (UserHeaders): Pre-identified user table headers.
+            If None, they will be automatically identified. Defaults to None.
+        item_headers (ItemHeaders): Pre-identified item table headers.
+            If None, they will be automatically identified. Defaults to None.
+        inter_headers (InterHeaders): Pre-identified interaction table headers.
+            If None, they will be automatically identified. Defaults to None.
+        normalize_ratings (bool): Whether to normalize rating values to
+            the range [0.0, 5.0]. Defaults to True.
+    """
     dataset_filename = f"{dataset_dir}/{dataset_name}/{dataset_name}"
     output_folder = f"{output_dir}/{dataset_name}"
 
@@ -183,6 +269,7 @@ def process_dataset(
     if inter_headers is None:
         inter_headers = get_inter_headers(inter_df.columns)
 
+    # Standardize interaction headers
     inter_df.rename(
         columns={
             inter_headers.user_id_column: USER_ID_COL,
@@ -197,6 +284,7 @@ def process_dataset(
         if user_headers is None:
             user_headers = get_user_headers(users_df.columns)
 
+        # Standardize user headers
         users_df.rename(
             columns={user_headers.user_id_column: USER_ID_COL}, inplace=True
         )
@@ -208,6 +296,7 @@ def process_dataset(
         if item_headers is None:
             item_headers = get_item_headers(items_df.columns)
 
+        # Standardize item headers
         rename_cols = {
             item_headers.item_id_column: ITEM_ID_COL,
             item_headers.name_column: ITEM_NAME_COL,
@@ -224,15 +313,17 @@ def process_dataset(
     except FileNotFoundError:
         items_df = None
 
-    if normalize_ratings:
+    # Normalize ratings between 0 and 5
+    if normalize_ratings and inter_df.loc[:, RATING_COL].max() != 5.0:
+        print("Normalizing ratings between 0 and 5...")
         inter_df.loc[:, RATING_COL] = normalize(
-            inter_df.loc[:, RATING_COL].values, lower=1.0, higher=5.0
+            inter_df.loc[:, RATING_COL].values, lower=0.0, higher=5.0
         )
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder, exist_ok=True)
 
-    # Clean and persist processed dataframes
+    # Clean and save processed dataframes to output_dir
     print("Cleaning INTER DataFrame...")
     inter_df = clean_dataframe(inter_df)
     inter_df.to_csv(f"{output_folder}/{dataset_name}.inter", sep=SEP, index=False)
