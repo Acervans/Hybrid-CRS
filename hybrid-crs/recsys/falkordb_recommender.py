@@ -322,7 +322,7 @@ class FalkorDBRecommender:
         # Item context score, weighted rating score, PageRank
         match_q = (
             f"MATCH (itm:Item) "
-            f"WHERE {or_expr} AND NOT itm.item_id in {seen} "
+            f"WHERE {or_expr} AND NOT itm.item_id IN {seen} "
             f"OPTIONAL MATCH ()-[r:RATED]->(itm) "
             f"WITH itm, avg(r.rating) AS avgRating, count(r) AS cnt "
             f"RETURN itm, ({score_expr}) AS contextScore, "
@@ -330,6 +330,8 @@ class FalkorDBRecommender:
             f"itm.pagerank AS pageRank"
         )
         res = self.g.ro_query(match_q, timeout=TIMEOUT).result_set
+        if not res:
+            return []
 
         # Merge scores, fill nan
         score_arr = np.array(
@@ -485,6 +487,7 @@ class FalkorDBRecommender:
             List[str]: List of natural language explanation strings
         """
         explanations = []
+        similar_items = {}
 
         # 1. Feature similarity via shared properties (e.g. category, brand, etc.)
         if shared_props:
@@ -493,7 +496,6 @@ class FalkorDBRecommender:
                 .result_set[0][0]
                 .properties
             )
-            similar_items = {}
             for prop in shared_props:
                 if self.item_feats.get(prop, "").endswith("seq"):
                     prop_values = rec_props.get(prop, "").split(" ")
@@ -532,11 +534,9 @@ class FalkorDBRecommender:
             f"WHERE r1.rating >= {min_rating} AND r2.rating >= {min_rating} AND r3.rating >= {min_rating} "
             f"WITH count(DISTINCT u2) AS numUsers, i AS item, {match_expr} AS sharesProp "
             f"RETURN numUsers, item, sharesProp "
-            f"ORDER BY sharesProp, numUsers DESC "
+            f"ORDER BY sharesProp DESC, numUsers DESC "
             f"LIMIT {top_collab_exp}"
         )
-        # TODO order by user similarity if not too slow
-        # TODO ORDER BY RATING SIMILARITY (abs diff) OR COSINE SIM
         cf_res = self.g.ro_query(
             query_cf,
             timeout=TIMEOUT,
@@ -619,7 +619,7 @@ if __name__ == "__main__":
         del ctx_props["item_id"], ctx_props["pagerank"], ctx_props["name"]
 
         exps = frec.explain_blackbox_recs(
-            user_id=1,
+            user_id=71559,
             item_id=props["item_id"],
             shared_props=ctx_props.keys(),
             min_rating=3.0,
