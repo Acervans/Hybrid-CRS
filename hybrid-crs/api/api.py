@@ -7,25 +7,29 @@ import pymupdf
 import html2text
 import asyncio
 import dotenv
-import falkordb
+import logging
+import uuid
 
-from fastapi import FastAPI, HTTPException, UploadFile, Depends
+from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.requests import Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
+from llama_index.core.workflow import HumanResponseEvent
 
 from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
+
+sys.path.append("..")  # For modular development
+
+from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent
 
 dotenv.load_dotenv()
 
 html2text.config.IMAGES_TO_ALT = True
 html2text.config.BODY_WIDTH = 0
-
-sys.path.append("..")  # For modular development
 
 OLLAMA_API_URL = "http://127.0.0.1:11434/api"
 OLLAMA_API_PROXY = "/ollama/api/{endpoint}"
@@ -37,6 +41,19 @@ WEB_SEARCH_RESULTS = 2
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
+
+
+# Setup logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+# Add handler and formatter if not already configured
+if not logger.hasHandlers():
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 
 ### UTILITY FUNCTIONS ###
@@ -105,6 +122,9 @@ app = FastAPI(
     summary="Application Programming Interface for the HybridCRS Platform",
 )
 
+# Store the workflow instances in a dictionary
+workflows = {}
+
 # NOTE add frontend deployed url
 allowed_origins = [
     "http://localhost:3000",  # Dev
@@ -129,6 +149,9 @@ async def root():
 
 @app.middleware("http")
 async def verify_jwt(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in ("/docs", "/openapi.json"):
+        return await call_next(request)
+
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing authorization token")
@@ -136,15 +159,20 @@ async def verify_jwt(request: Request, call_next):
     token = auth_header.split(" ")[1]
     try:
         # TODO # Extract user ID/email, role and restrict access to specific endpoints
-        payload = jwt.decode(jwt=token, key=SUPABASE_JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(
+            jwt=token,
+            key=SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
         request.state.jwt = payload
 
         response = await call_next(request)
         return response
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except (jwt.InvalidSignatureError, jwt.InvalidTokenError, jwt.DecodeError):
-        raise HTTPException(status_code=403, detail="Access denied")
+    except (jwt.InvalidSignatureError, jwt.InvalidTokenError, jwt.DecodeError) as e:
+        raise HTTPException(status_code=403, detail=f"Access denied: {e}")
 
 
 @app.get(OLLAMA_API_PROXY)
@@ -233,3 +261,72 @@ async def pdf_to_text(file: UploadFile):
         text += page.get_text() + "\n"
 
     return Response(text)
+
+
+@app.post("/start-workflow")
+async def start_workflow(user_id: str, dataset_name: str):
+    workflow_id = str(uuid.uuid4())
+    wf = HybridCRSWorkflow(
+        wid=workflow_id,
+        user_id=user_id,
+        dataset_name=dataset_name,
+        timeout=300,
+        verbose=True,
+    )
+
+    # Store the workflow instance
+    workflows[workflow_id] = {"wf": wf, "handler": None}
+
+    async def event_generator():
+        logger.debug(f"event_generator: created workflow {workflow_id}")
+        yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
+
+        handler = wf.run()
+
+        # Store the workflow handler
+        workflows[workflow_id]["handler"] = handler
+
+        logger.debug(f"event_generator: obtained handler {id(handler)}")
+        try:
+            # Stream events and yield to client
+            async for ev in wf.stream_events():
+                if not isinstance(ev, StreamEvent):
+                    logger.info(f"Sending message to client: {ev}")
+                yield f"{json.dumps({'event': ev.__repr_name__(), 'message': ev.dict()})}\n\n"
+            final_result = await handler
+
+            yield f"{json.dumps({'result': final_result})}\n\n"
+        except Exception as e:
+            error_message = f"Error in workflow: {str(e)}"
+            logger.error(error_message)
+            yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
+        finally:
+            # Clean up
+            workflows.pop(workflow_id, None)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/send-user-response")
+async def send_user_response(data: dict = Body(...)) -> JSONResponse:
+    workflow_id = data.get("workflow_id")
+    user_response = data.get("user_response")
+
+    # Get the workflow instance
+    wf_dict = workflows.get(workflow_id, {})
+    wf = wf_dict.get("wf", None)
+    logger.info(f"send_user_response: user response {user_response}")
+    if wf:
+        # Get workflow handler to send event
+        handler = wf_dict.get("handler", None)
+        if not handler:
+            raise HTTPException(
+                status_code=404, detail=f"Handler for workflow {workflow_id} not found"
+            )
+        handler.ctx.send_event(HumanResponseEvent(response=str(user_response)))
+        return JSONResponse({"status": "response received"})
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workflow {workflow_id} not found or already completed",
+        )

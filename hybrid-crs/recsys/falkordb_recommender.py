@@ -201,6 +201,55 @@ class FalkorDBRecommender:
         # Refresh schema for algorithms
         self.g.schema.refresh(1)
 
+    def create_user(self, user_id: Any) -> Any:
+        """
+        Creates a new user in the graph if it doesn't exist.
+
+        Args:
+            user_id (Any): ID of the user to create
+
+        Returns:
+            Any: ID of the created user
+        """
+        return self.g.query(
+            "MERGE (u:User {user_id: $user_id}) RETURN u.user_id",
+            params={"user_id": user_id},
+            timeout=TIMEOUT,
+        ).result_set[0][0]
+
+    def add_user_properties(self, user_id: Any, properties: Dict[str, Any]) -> None:
+        """
+        Adds properties to a user in the graph.
+
+        Args:
+            user_id (Any): ID of the user to update
+            properties (Dict[str, Any]): Properties to add to the user
+        """
+        self.g.query(
+            "MATCH (u:User {user_id: $user_id}) " "SET u += $props",
+            params={"user_id": user_id, "props": properties},
+            timeout=TIMEOUT,
+        )
+
+    def add_user_interactions(
+        self, user_id: Any, inters: List[Tuple[Any, float]]
+    ) -> None:
+        """
+        Adds interactions to a user in the graph.
+
+        Args:
+            user_id (Any): ID of the user to update
+            inters (List[Tuple[Any, float]]): List of item IDs and ratings
+        """
+        for item_id, rating in inters:
+            self.g.query(
+                "MATCH (u:User {user_id: $user_id}), (i:Item {item_id: $item_id}) "
+                "MERGE (u)-[r:RATED]->(i) "
+                "SET r.rating = $rating",
+                params={"user_id": user_id, "item_id": item_id, "rating": rating},
+                timeout=TIMEOUT,
+            )
+
     def get_unique_feat_values(
         self, label: Literal["User", "Item", "RATED"], feat: str
     ) -> List[Any]:

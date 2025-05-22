@@ -36,7 +36,7 @@ def parse_model(model: str):
         if importlib.util.find_spec(model):
             module = importlib.import_module(model)
             model_class = getattr(module, model)
-        if not model_class:
+        else:
             raise v
 
     return model_class
@@ -320,32 +320,32 @@ def get_recommendations(
 
 
 if __name__ == "__main__":
-    # run_recbole(
-    #     "DynamicEASEr", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
+    run_recbole(
+        "DynamicEASEr", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
+    )
+
+    # config, model, dataset, _train_set, _valid_set, _test_set = load_data_and_model(
+    #     load_model='./saved/EASE-May-22-2025_04-34-38.pth',
+    #     preload_dataset=None,
     # )
 
-    config, model, dataset, _train_set, _valid_set, _test_set = load_data_and_model(
-        load_model='./saved/EASE-May-22-2025_04-34-38.pth',
-        preload_dataset=None,
-    )
+    # res = get_recommendations(
+    #     1,
+    #     model,
+    #     load_device,
+    #     dataset,
+    # )
+    # print(res)
 
-    res = get_recommendations(
-        1,
-        model,
-        load_device,
-        dataset,
-    )
-    print(res)
-
-    # Load another model with same dataset
-    config, model, _, _, _, _ = load_data_and_model(
-        load_model='./saved/ItemKNN-May-22-2025_05-46-48.pth',
-        preload_dataset=dataset,
-    )
-    res = get_recommendations(
-        1,
-        model,
-        load_device,
-        dataset,
-    )
-    print(res)
+    # # Load another model with same dataset
+    # config, model, _, _, _, _ = load_data_and_model(
+    #     load_model='./saved/ItemKNN-May-22-2025_05-46-48.pth',
+    #     preload_dataset=dataset,
+    # )
+    # res = get_recommendations(
+    #     1,
+    #     model,
+    #     load_device,
+    #     dataset,
+    # )
+    # print(res)
