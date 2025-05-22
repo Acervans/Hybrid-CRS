@@ -19,18 +19,6 @@ services:
               count: 1
               capabilities: [gpu]
 
-  qdrant:
-    container_name: qdrant
-    image: qdrant/qdrant:latest
-    volumes:
-      - ./qdrant_storage:/qdrant/storage:z
-    ports:
-      - 6333:6333
-      - 6334:6334
-    pull_policy: always
-    tty: true
-    restart: unless-stopped
-
   falkordb:
     image: falkordb/falkordb:latest
     container_name: falkordb

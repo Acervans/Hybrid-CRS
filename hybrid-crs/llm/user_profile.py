@@ -36,7 +36,7 @@ class UserProfile(BaseModel):
     user_id: int | str
 
     """
-    {   'genres': {
+    {   'category': {
             'type': DICT,
             'data': {
                 'action': True,

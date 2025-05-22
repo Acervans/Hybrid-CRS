@@ -1,10 +1,12 @@
 data_path: ./datasets
+# data_path: ../data_processing/datasets/processed
+
 # dataset_save_path: saved/lastfm_recbole-dataset.pth
 # dataset: lastfm_recbole
 
 seed: 2025
 use_gpu: false
-device: cpu
+device: cuda
 
 # Dataset config
 # load_col:
@@ -32,8 +34,8 @@ eval_args:
   split: {'RS': [0.8,0.1,0.1]}
   order: RO
   group_by: user
-  mode: uni100
-  # mode: full # Test only for slower models
+  # mode: uni100
+  mode: full
 
 metrics: [Recall, MRR, NDCG, MAP, Precision]
 topk: 10

@@ -48,7 +48,7 @@ if len(graph_store.get(ids=["u_1"])) == 0:
     item_nodes = [
         EntityNode(
             name=f"i_{x.movieId}",
-            label="ITEM",
+            label="Item",
             properties={"item_name": x.title, "genres": x.genres.split("|")},
         )
         for x in items_df.itertuples()
@@ -58,9 +58,9 @@ if len(graph_store.get(ids=["u_1"])) == 0:
     user_nodes = [
         EntityNode(
             name=f"u_{x}",
-            label="USER"
+            label="User"
         )
-        for x in ratings_df.userId
+        for x in ratings_df.userId.unique()
     ]
     graph_store.upsert_nodes(user_nodes)
 
