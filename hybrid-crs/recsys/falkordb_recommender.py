@@ -3,8 +3,10 @@
 
 import fireducks.pandas as pd
 import numpy as np
+import json
 
 from falkordb import FalkorDB
+from falkordb.helpers import quote_string
 from typing import List, Dict, Any, Tuple, Optional, Literal
 from redis.exceptions import ResponseError
 from csv import Sniffer
@@ -87,8 +89,15 @@ class FalkorDBRecommender:
 
             # Process feature types, convert sequentials to lists
             self.inter_feats = self._process_columns(self.inter_df)
-            self.users_feats = self._process_columns(self.users_df)
+            self.user_feats = self._process_columns(self.users_df)
             self.item_feats = self._process_columns(self.items_df)
+
+            # Store dataset schema
+            self.schema = {
+                "User Node Features": self.user_feats,
+                "Item Node Features": self.item_feats,
+                "RATED Edge Features": self.inter_feats,
+            }
 
             self._ingest()
             print(
@@ -122,6 +131,14 @@ class FalkorDBRecommender:
                 )
             except FileNotFoundError:
                 self.item_feats = {}
+
+            self.schema: dict = json.loads(
+                self.g.ro_query(
+                    "MATCH (s:Schema) RETURN s.schema LIMIT 1",
+                    params={"dataset_name": dataset_name},
+                    timeout=TIMEOUT,
+                ).result_set[0][0]
+            )
 
         # Global average rating
         self.global_avg: float = self.g.query(
@@ -196,6 +213,13 @@ class FalkorDBRecommender:
             "WHERE node.item_id IS NOT NULL "
             "SET node.pagerank = score",
             timeout=TIMEOUT,
+        )
+
+        # Add a schema node for the dataset
+        print("Adding schema node...")
+        self.g.query(
+            "MERGE (s:Schema {schema: $schema})",
+            params={"schema": json.dumps(self.schema)},
         )
 
         # Refresh schema for algorithms
@@ -300,10 +324,12 @@ class FalkorDBRecommender:
             List[Any]: List of item IDs
         """
         q = (
-            f"MATCH (u:User {{user_id: {user_id}}})-[r:RATED]->(i:Item) "
-            f"RETURN i.item_id AS item_id"
+            "MATCH (u:User {user_id: $user_id})-[r:RATED]->(i:Item) "
+            "RETURN i.item_id AS item_id"
         )
-        res = self.g.ro_query(q).result_set
+        res = self.g.ro_query(
+            q, params={"user_id": user_id}, timeout=TIMEOUT
+        ).result_set
         return [row[0] for row in res]
 
     def get_users_by_item(self, item_id: Any) -> List[Any]:
@@ -317,10 +343,12 @@ class FalkorDBRecommender:
             List[Any]: List of user IDs
         """
         q = (
-            f"MATCH (u:User)-[r:RATED]->(i:Item {{item_id: {item_id}}}) "
-            f"RETURN u.user_id AS user_id"
+            "MATCH (u:User)-[r:RATED]->(i:Item {item_id: $item_id}) "
+            "RETURN u.user_id AS user_id"
         )
-        res = self.g.ro_query(q).result_set
+        res = self.g.ro_query(
+            q, params={"item_id": item_id}, timeout=TIMEOUT
+        ).result_set
         return [row[0] for row in res]
 
     def recommend_contextual(
@@ -354,9 +382,9 @@ class FalkorDBRecommender:
             else:
                 op = "="
             if isinstance(v, list):
-                conditions.extend((f"itm.{k} {op} '{x}'" for x in v))
+                conditions.extend((f"itm.{k} {op} {quote_string(x)}" for x in v))
             else:
-                conditions.append(f"itm.{k} {op} '{v}'")
+                conditions.append(f"itm.{k} {op} {quote_string(v)}")
         or_expr = f"({" OR ".join(conditions)})" if conditions else "true"
         score_expr = (
             " + ".join(
@@ -370,15 +398,23 @@ class FalkorDBRecommender:
         seen = self.get_items_by_user(user_id)
         # Item context score, weighted rating score, PageRank
         match_q = (
-            f"MATCH (itm:Item) "
-            f"WHERE {or_expr} AND NOT itm.item_id IN {seen} "
-            f"OPTIONAL MATCH ()-[r:RATED]->(itm) "
-            f"WITH itm, avg(r.rating) AS avgRating, count(r) AS cnt "
+            "MATCH (itm:Item) "
+            f"WHERE {or_expr} AND NOT itm.item_id IN $seen "
+            "OPTIONAL MATCH ()-[r:RATED]->(itm) "
+            "WITH itm, avg(r.rating) AS avgRating, count(r) AS cnt "
             f"RETURN itm, ({score_expr}) AS contextScore, "
-            f"((cnt * avgRating) + ({MIN_R} * {self.global_avg})) / (cnt + {MIN_R}) AS weightedScore, "  # Bayesian average
-            f"itm.pagerank AS pageRank"
+            "((cnt * avgRating) + ($min_r * $global_avg)) / (cnt + $min_r) AS weightedScore, "
+            "itm.pagerank AS pageRank"
         )
-        res = self.g.ro_query(match_q, timeout=TIMEOUT).result_set
+        res = self.g.ro_query(
+            match_q,
+            params={
+                "seen": seen,
+                "min_r": MIN_R,
+                "global_avg": self.global_avg,
+            },
+            timeout=TIMEOUT,
+        ).result_set
         if not res:
             return []
 
@@ -430,15 +466,20 @@ class FalkorDBRecommender:
         """
         # Find top-k similar users based on co-rated items
         q = (
-            f"MATCH (u1:User {{user_id: {user_id}}})-[r1:RATED]->(i:Item)<-[r2:RATED]-(u2:User) "
-            f"WHERE r1.rating >= {min_rating} AND r2.rating >= {min_rating} AND u1 <> u2 "
-            f"WITH u2, count(i) AS sharedItems "
-            f"ORDER BY sharedItems DESC "
-            f"LIMIT {k} "
-            f"RETURN u2.user_id AS neighborId"
+            "MATCH (u1:User {user_id: $user_id})-[r1:RATED]->(i:Item)<-[r2:RATED]-(u2:User) "
+            "WHERE r1.rating >= $min_rating AND r2.rating >= $min_rating AND u1 <> u2 "
+            "WITH u2, count(i) AS sharedItems "
+            "ORDER BY sharedItems DESC "
+            "LIMIT $k "
+            "RETURN u2.user_id AS neighborId"
         )
         neighbor_res = self.g.ro_query(
             q,
+            params={
+                "user_id": user_id,
+                "min_rating": min_rating,
+                "k": k,
+            },
             timeout=TIMEOUT,
         ).result_set
         if not neighbor_res:
@@ -450,16 +491,24 @@ class FalkorDBRecommender:
         seen = self.get_items_by_user(user_id)
         # Get recommendations from similar neighbors, sort by weighted rating
         q_recs = (
-            f"MATCH (n:User)-[r:RATED]->(i:Item) "
-            f"WHERE n.user_id IN {neighbor_ids} AND NOT i.item_id IN {seen} AND r.rating >= {min_rating} "
-            f"WITH i, avg(r.rating) as avgRating, count(r.rating) as cnt "
-            f"WITH i, ((cnt * avgRating) + ({k} * {self.global_avg})) / (cnt + {k}) AS weightedScore "  # Bayesian average
-            f"RETURN i, weightedScore "
-            f"ORDER BY weightedScore DESC "
-            f"LIMIT {top_n}"
+            "MATCH (n:User)-[r:RATED]->(i:Item) "
+            "WHERE n.user_id IN $neighbor_ids AND NOT i.item_id IN $seen AND r.rating >= $min_rating "
+            "WITH i, avg(r.rating) as avgRating, count(r.rating) as cnt "
+            "WITH i, ((cnt * avgRating) + ($k * $global_avg)) / (cnt + $k) AS weightedScore "
+            "RETURN i, weightedScore "
+            "ORDER BY weightedScore DESC "
+            "LIMIT $top_n"
         )
         recs = self.g.ro_query(
             q_recs,
+            params={
+                "neighbor_ids": neighbor_ids,
+                "seen": seen,
+                "min_rating": min_rating,
+                "k": k,
+                "global_avg": self.global_avg,
+                "top_n": top_n,
+            },
             timeout=TIMEOUT,
         ).result_set
 
@@ -541,7 +590,10 @@ class FalkorDBRecommender:
         # 1. Feature similarity via shared properties (e.g. category, brand, etc.)
         if shared_props:
             rec_props = (
-                self.g.query(f"MATCH (rec:Item {{item_id: {item_id}}}) RETURN rec")
+                self.g.query(
+                    "MATCH (rec:Item {item_id: $item_id}) RETURN rec",
+                    params={"item_id": item_id},
+                )
                 .result_set[0][0]
                 .properties
             )
@@ -549,19 +601,24 @@ class FalkorDBRecommender:
                 if self.item_feats.get(prop, "").endswith("seq"):
                     prop_values = rec_props.get(prop, "").split(" ")
                     condition = " OR ".join(
-                        f"i.{prop} CONTAINS '{x}'" for x in prop_values
+                        f"i.{prop} CONTAINS {quote_string(x)}" for x in prop_values
                     )
                 else:
-                    condition = f"i.{prop} = '{rec_props.get(prop, "")}'"
+                    condition = f"i.{prop} = {quote_string(rec_props.get(prop, ""))}"
                 query_feat = (
-                    f"MATCH (u:User {{user_id: {user_id}}})-[r:RATED]->(i:Item) "
-                    f"WHERE r.rating >= {min_rating} AND {condition} "
+                    "MATCH (u:User {user_id: $user_id})-[r:RATED]->(i:Item) "
+                    f"WHERE r.rating >= $min_rating AND {condition} "
                     f"RETURN i.{prop} AS value, i "
-                    f"ORDER BY r.rating DESC "
-                    f"LIMIT {top_feat_exp}"
+                    "ORDER BY r.rating DESC "
+                    "LIMIT $top_feat_exp"
                 )
                 feat_res = self.g.ro_query(
                     query_feat,
+                    params={
+                        "user_id": user_id,
+                        "min_rating": min_rating,
+                        "top_feat_exp": top_feat_exp,
+                    },
                     timeout=TIMEOUT,
                 ).result_set
                 for value, liked_item in feat_res:
@@ -579,22 +636,29 @@ class FalkorDBRecommender:
             f"(i.item_id IN {list(similar_items.keys())})" if similar_items else "false"
         )
         query_cf = (
-            f"MATCH (u:User {{user_id: {user_id}}})-[r1:RATED]->(i:Item)<-[r2:RATED]-(u2:User)-[r3:RATED]->(rec:Item {{item_id: {item_id}}}) "
-            f"WHERE r1.rating >= {min_rating} AND r2.rating >= {min_rating} AND r3.rating >= {min_rating} "
+            "MATCH (u:User {user_id: $user_id})-[r1:RATED]->(i:Item)<-[r2:RATED]-(u2:User)-[r3:RATED]->(rec:Item {item_id: $item_id}) "
+            "WHERE r1.rating >= $min_rating AND r2.rating >= $min_rating AND r3.rating >= $min_rating "
             f"WITH count(DISTINCT u2) AS numUsers, i AS item, {match_expr} AS sharesProp "
-            f"RETURN numUsers, item, sharesProp "
-            f"ORDER BY sharesProp DESC, numUsers DESC "
-            f"LIMIT {top_collab_exp}"
+            "RETURN numUsers, item, sharesProp "
+            "ORDER BY sharesProp DESC, numUsers DESC "
+            "LIMIT $top_collab_exp"
         )
         cf_res = self.g.ro_query(
             query_cf,
+            params={
+                "user_id": user_id,
+                "item_id": item_id,
+                "min_rating": min_rating,
+                "top_collab_exp": top_collab_exp,
+            },
             timeout=TIMEOUT,
         ).result_set
         if cf_res:
             for num_users, item, shares_prop in cf_res:
                 similar_str = (
                     f"It also has similar features: {(
-                        ", ".join(f"{x[0]} = {x[1]}" for x in similar_items[item.properties["item_id"]])
+                        ", ".join(
+                            f"{x[0]} = {x[1]}" for x in similar_items[item.properties["item_id"]])
                     )}"
                     if shares_prop
                     else ""
@@ -608,10 +672,12 @@ class FalkorDBRecommender:
 
         # 3. Popularity of item as general acceptance
         query_pop = (
-            f"MATCH (:User)-[r:RATED]->(rec:Item {{item_id: {item_id}}}) "
-            f"RETURN avg(r.rating) AS avgRating, count(r) AS totalRatings"
+            "MATCH (:User)-[r:RATED]->(rec:Item {item_id: $item_id}) "
+            "RETURN avg(r.rating) AS avgRating, count(r) AS totalRatings"
         )
-        pop_result = self.g.ro_query(query_pop, timeout=TIMEOUT).result_set
+        pop_result = self.g.ro_query(
+            query_pop, params={"item_id": item_id}, timeout=TIMEOUT
+        ).result_set
         if pop_result:
             avg_rating, total = pop_result[0]
             if avg_rating and avg_rating >= rating_threshold:
@@ -635,7 +701,7 @@ if __name__ == "__main__":
     print(res)
 
     res = frec.recommend_contextual(
-        user_id=71559,
+        user_id=1,
         item_props={"category": ["Animation", "Action"]},
         top_n=10,
         context_weight=0.5,
@@ -646,7 +712,7 @@ if __name__ == "__main__":
         print(node, score)
 
     res = frec.recommend_cf(
-        user_id=71559,
+        user_id=1,
         top_n=10,
         k=10,
     )
@@ -654,7 +720,7 @@ if __name__ == "__main__":
         print(node, score)
 
     res = frec.recommend_hybrid(
-        user_id=71559,
+        user_id=1,
         item_props={"category": "Animation"},
         top_n=10,
         k=10,
@@ -668,7 +734,7 @@ if __name__ == "__main__":
         del ctx_props["item_id"], ctx_props["pagerank"], ctx_props["name"]
 
         exps = frec.explain_blackbox_recs(
-            user_id=71559,
+            user_id=1,
             item_id=props["item_id"],
             shared_props=ctx_props.keys(),
             min_rating=3.0,

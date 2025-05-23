@@ -27,4 +27,4 @@ wg-quick down ./tunnel.conf
 ### Update core Python libraries ###
 pip install --upgrade ollama llama-index llama-cloud llama-cloud-services llama-index-cli llama-index-embeddings-ollama \
     llama-index-embeddings-fastembed llama-index-embeddings-huggingface llama-index-embeddings-openai llama-index-graph-stores-falkordb \
-    llama-index-indices-managed-llama-cloud llama-index-llms-ollama llama-parse streamlit fireducks fastapi html2text pymupdf falkordb
+    llama-index-indices-managed-llama-cloud llama-index-llms-ollama llama-parse streamlit fireducks fastapi html2text pymupdf falkordb supabase
