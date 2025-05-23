@@ -223,6 +223,21 @@ def clean_dataframe(
     return pd.from_pandas(dataset)
 
 
+def sniff_delimiter(sample: str) -> str:
+    """
+    Sniff the delimiter given a sample string.
+
+    Args:
+        sample (str): Sample string to analyze
+
+    Returns:
+        str: Detected delimiter
+    """
+    sniffer = Sniffer()
+    dialect = sniffer.sniff(sample)
+    return dialect.delimiter
+
+
 def process_dataset(
     dataset_name: str,
     dataset_dir: str = "./datasets/raw",
@@ -258,9 +273,7 @@ def process_dataset(
     try:
         # Sniff delimiter from first rows
         with open(f"{dataset_filename}.inter", "r") as f:
-            sniffer = Sniffer()
-            dialect = sniffer.sniff(f"{f.readline()}\n{f.readline()}")
-            sep = dialect.delimiter
+            sep = sniff_delimiter(f"{f.readline()}\n{f.readline()}")
     except FileNotFoundError:
         print(f"Mandatory file '{dataset_name}.inter' not found")
         return
