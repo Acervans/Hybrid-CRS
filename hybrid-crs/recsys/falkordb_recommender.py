@@ -134,9 +134,7 @@ class FalkorDBRecommender:
 
             self.schema: dict = json.loads(
                 self.g.ro_query(
-                    "MATCH (s:Schema) RETURN s.schema LIMIT 1",
-                    params={"dataset_name": dataset_name},
-                    timeout=TIMEOUT,
+                    "MATCH (s:Schema) RETURN s.schema LIMIT 1", timeout=TIMEOUT
                 ).result_set[0][0]
             )
 
