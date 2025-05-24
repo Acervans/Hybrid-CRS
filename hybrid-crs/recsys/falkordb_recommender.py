@@ -263,14 +263,14 @@ class FalkorDBRecommender:
             user_id (Any): ID of the user to update
             inters (List[Tuple[Any, float]]): List of item IDs and ratings
         """
-        for item_id, rating in inters:
-            self.g.query(
-                "MATCH (u:User {user_id: $user_id}), (i:Item {item_id: $item_id}) "
-                "MERGE (u)-[r:RATED]->(i) "
-                "SET r.rating = $rating",
-                params={"user_id": user_id, "item_id": item_id, "rating": rating},
-                timeout=TIMEOUT,
-            )
+        self.g.query(
+            "UNWIND $inters AS r "
+            "MATCH (usr:User {user_id: $user_id}), (itm:Item {item_id: r[0]}) "
+            "MERGE (usr)-[e:RATED]->(itm) "
+            "SET e.rating = r[1]",
+            params={"inters": inters, "user_id": user_id},
+            timeout=TIMEOUT,
+        )
 
     def get_unique_feat_values(
         self, label: Literal["User", "Item", "RATED"], feat: str

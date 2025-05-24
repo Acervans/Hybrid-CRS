@@ -8,6 +8,7 @@ from tqdm import tqdm
 if __name__ == '__main__':
 
     models_configs = [
+        ('DynamicEASEr',      'config/generic.yaml'),
         ('BPR',      'config/generic.yaml'),
         ('EASE',     'config/generic.yaml'),
         ('FM',       'config/generic.yaml'),
