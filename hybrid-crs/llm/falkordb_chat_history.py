@@ -1,111 +1,162 @@
+""" Chat history storage using FalkorDB as graph database 
+"""
+
 import json
 from falkordb import FalkorDB
 
-# Connect to local FalkorDB
-db = FalkorDB(host='localhost', port=6379)
-graph = db.select_graph('chat_history')
 
-def store_conversation(conv_id: str, messages: list[dict]):
-    """
-    Creates a new conversation node with the full message history (JSON-encoded).
-    """
-    content_json = json.dumps(messages)
-    query = f"""CREATE (c:Conversation {{id: '{conv_id}', content: '{content_json}'}})"""
-    print(query)
-    return graph.query(query)
+TIMEOUT = 5 * 1000 * 60  # 5 minutes
 
-def get_conversation(conv_id: str):
-    """
-    Retrieves the full message history for a conversation ID.
-    """
-    query = f"""
-    MATCH (c:Conversation {{id: '{conv_id}'}})
-    RETURN c.content
-    """
-    result = graph.query(query)
 
-    if result.result_set:
-        raw_json = result.result_set[0][0]
-        return json.loads(raw_json)
-    return None
+class FalkorDBChatHistory:
 
-def append_message(conv_id: str, new_message: dict):
-    """
-    Appends a new message to an existing conversation.
-    """
-    query = f"""
-    MATCH (c:Conversation {{id: '{conv_id}'}})
-    RETURN c
-    """
-    result = graph.query(query)
+    def __init__(self, graph_name: str = "chat_history", **falkordb_kwargs):
+        """
+        Initializes the chat history storage.
+        Creates a graph if it doesn't exist.
 
-    if not result.result_set:
-        print(f"Conversation '{conv_id}' not found.")
-        return
+        Args:
+            graph_name (str): Name of the graph to store chat history.
+            **falkordb_kwargs: Additional keyword arguments for FalkorDB connection.
+        """
+        self.db = FalkorDB(host="localhost", port=6379, **falkordb_kwargs)
+        self.g = self.db.select_graph(graph_name)
 
-    conv_node = result.result_set[0][0]
-    current_content = json.loads(conv_node.properties['content'])
+        try:
+            self.g.query("CREATE INDEX ON :Chat(id)", timeout=TIMEOUT)
+        except Exception:
+            pass
 
-    current_content.append(new_message)
-    updated_json = json.dumps(current_content)
+    def store_chat(self, chat_id: str, messages: list[dict]) -> None:
+        """
+        Creates a new chat node with the full message history (JSON-encoded).
 
-    update_query = f"""
-    MATCH (c:Conversation {{id: '{conv_id}'}})
-    SET c.content = '{updated_json.replace("'", "\\'")}'
-    """
-    graph.query(update_query)
+        Args:
+            chat_id (str): Unique identifier for the chat.
+            messages (list[dict]): List of messages in the chat.
+        """
+        content_json = json.dumps(messages)
+        query = "CREATE (c:Chat {id: $chat_id, content: $content})"
+        self.g.query(
+            query, params={"chat_id": chat_id, "content": content_json}, timeout=TIMEOUT
+        )
 
-def list_conversations():
-    """
-    Returns a list of all conversation IDs and their content.
-    """
-    query = "MATCH (c:Conversation) RETURN c.id, c.content"
-    result = graph.query(query)
+    def get_chat(self, chat_id: str) -> list[dict] | None:
+        """
+        Retrieves the full message history for a chat ID.
 
-    conversations = []
-    for row in result.result_set:
-        conv_id = row[0]
-        content = json.loads(row[1])
-        conversations.append({'id': conv_id, 'messages': content})
+        Args:
+            chat_id (str): Unique identifier for the chat.
+        Returns:
+            list[dict]: List of messages in the chat, or None if not found.
+        """
+        query = """
+        MATCH (c:Chat {id: $chat_id})
+        RETURN c.content
+        """
+        result = self.g.query(query, params={"chat_id": chat_id}, timeout=TIMEOUT)
 
-    return conversations
+        if result.result_set:
+            raw_json = result.result_set[0][0]
+            return json.loads(raw_json)
+        return None
 
-def delete_conversation(conv_id: str):
-    """
-    Deletes a conversation node.
-    """
-    query = f"""
-    MATCH (c:Conversation {{id: '{conv_id}'}})
-    DETACH DELETE c
-    """
-    graph.query(query)
+    def append_message(self, chat_id: str, new_message: dict) -> None:
+        """
+        Appends a new message to an existing chat.
+
+        Args:
+            chat_id (str): Unique identifier for the chat.
+            new_message (dict): The new message to append.
+        """
+        query = """
+        MATCH (c:Chat {id: $chat_id})
+        RETURN c
+        """
+        result = self.g.query(query, params={"chat_id": chat_id}, timeout=TIMEOUT)
+
+        if not result.result_set:
+            print(f"Chat '{chat_id}' not found.")
+            return
+
+        conv_node = result.result_set[0][0]
+        current_content = json.loads(conv_node.properties["content"])
+
+        current_content.append(new_message)
+        updated_json = json.dumps(current_content)
+
+        update_query = """
+        MATCH (c:Chat {id: $chat_id})
+        SET c.content = $content
+        """
+        self.g.query(
+            update_query,
+            params={"chat_id": chat_id, "content": updated_json},
+            timeout=TIMEOUT,
+        )
+
+    def list_chats(self) -> list[dict]:
+        """
+        Returns a list of all chat IDs and their content.
+
+        Returns:
+            list[dict]: List of dictionaries with chat IDs and their messages.
+        """
+        query = "MATCH (c:Chat) RETURN c.id, c.content"
+        result = self.g.query(query, timeout=TIMEOUT)
+
+        chats = []
+        for row in result.result_set:
+            chat_id = row[0]
+            content = json.loads(row[1])
+            chats.append({"id": chat_id, "messages": content})
+
+        return chats
+
+    def delete_chat(self, chat_id: str) -> None:
+        """
+        Deletes a chat node.
+
+        Args:
+            chat_id (str): Unique identifier for the chat to delete.
+        """
+        query = """
+        MATCH (c:Chat {id: $chat_id})
+        DETACH DELETE c
+        """
+        self.g.query(query, params={"chat_id": chat_id}, timeout=TIMEOUT)
 
 
 if __name__ == "__main__":
-    # Initial chat
-    chat = [
-        {"role": "user", "content": "Hello"},
-        {"role": "assistant", "content": "Hi there! How can I help?"}
-    ]
 
-    conversation_id = "conv-001"
+    def test():
+        # Initial chat
+        chat = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there! How can I help?"},
+        ]
 
-    # Store
-    res = store_conversation(conversation_id, chat)
-    print(res)
+        chat_id = "chat-001"
 
-    # Append message
-    append_message(conversation_id, {"role": "user", "content": "What's the time?"})
+        ch = FalkorDBChatHistory()
+        # Store
+        res = ch.store_chat(chat_id, chat)
+        print(res)
 
-    # Get conversation
-    full_chat = get_conversation(conversation_id)
-    print(f"Conversation '{conversation_id}':\n", full_chat)
+        # Append message
+        ch.append_message(chat_id, {"role": "user", "content": "What's the time?"})
 
-    # List all conversations
-    all_convs = list_conversations()
-    print(f"\nAll conversations:")
-    for conv in all_convs:
-        print(f"- ID: {conv['id']}, Messages: {len(conv['messages'])}")
+        # Get chat
+        full_chat = ch.get_chat(chat_id)
+        print(f"Chat '{chat_id}':\n", full_chat)
 
-    # Delete
-    delete_conversation(conversation_id)
+        # List all chats
+        all_convs = ch.list_chats()
+        print(f"\nAll chats:")
+        for conv in all_convs:
+            print(f"- ID: {conv['id']}, Messages: {len(conv['messages'])}")
+
+        # Delete
+        ch.delete_chat(chat_id)
+
+    test()
