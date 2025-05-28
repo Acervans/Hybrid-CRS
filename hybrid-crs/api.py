@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import jwt
 import httpx
@@ -10,7 +11,12 @@ import dotenv
 import logging
 import uuid
 
-from fastapi import Body, FastAPI, HTTPException, UploadFile
+from fastapi import (
+    Body,
+    FastAPI,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,9 +28,16 @@ from llama_index.core.workflow import HumanResponseEvent
 from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
-sys.path.append("..")  # For modular development
+from supabase import create_client, Client
 
 from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent
+from data_processing.data_utils import (
+    get_datatype,
+    get_inter_headers,
+    get_item_headers,
+    get_user_headers,
+    normalize,
+)
 
 dotenv.load_dotenv()
 
@@ -39,14 +52,16 @@ WEB_SEARCH_TIMEOUT = 10
 WEB_SEARCH_RESULTS = 2
 
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
 
 Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 
 
-# Setup logger
+# Setup logging functionality
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-# Add handler and formatter if not already configured
 if not logger.hasHandlers():
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
@@ -122,6 +137,9 @@ app = FastAPI(
     summary="Application Programming Interface for the HybridCRS Platform",
 )
 
+# Initialize Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 # Store the workflow instances in a dictionary
 workflows = {}
 
@@ -141,7 +159,6 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -158,7 +175,8 @@ async def verify_jwt(request: Request, call_next):
 
     token = auth_header.split(" ")[1]
     try:
-        # TODO # Extract user ID/email, role and restrict access to specific endpoints
+        # TODO # Extract user ID/email, restrict access to specific endpoints,
+        # restrict DB operations if JWT's user_id and row user_id dont match
         payload = jwt.decode(
             jwt=token,
             key=SUPABASE_JWT_SECRET,

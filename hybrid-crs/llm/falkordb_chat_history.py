@@ -10,7 +10,7 @@ TIMEOUT = 5 * 1000 * 60  # 5 minutes
 
 class FalkorDBChatHistory:
 
-    def __init__(self, graph_name: str = "chat_history", **falkordb_kwargs):
+    def __init__(self, graph_name: str = "chat-history", **falkordb_kwargs):
         """
         Initializes the chat history storage.
         Creates a graph if it doesn't exist.

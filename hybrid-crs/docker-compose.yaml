@@ -1,0 +1,29 @@
+services:
+  hybrid-crs-api:
+    container_name: hybrid-crs-api
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 8000:8000
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    env_file:
+      - .env
+
+    volumes:
+      - ./data_processing/datasets:/api/data_processing/datasets
+      - ./recsys/saved:/api/recsys/saved
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  datasets: {}
+  models: {}
