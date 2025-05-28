@@ -321,7 +321,7 @@ def get_recommendations(
 
 if __name__ == "__main__":
     run_recbole(
-        "DynamicEASEr", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
+        "EASE", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
     )
 
     # config, model, dataset, _train_set, _valid_set, _test_set = load_data_and_model(
