@@ -46,7 +46,10 @@ class FalkorDBRecommender:
         try:
             empty = (
                 clear
-                or self.g.ro_query("MATCH (n) RETURN count(*)").result_set[0][0] == 0
+                or self.g.ro_query(
+                    "MATCH (n) RETURN count(*)", timeout=TIMEOUT
+                ).result_set[0][0]
+                == 0
             )
             # Clear any existing data
             if clear:
@@ -140,7 +143,7 @@ class FalkorDBRecommender:
 
         # Global average rating
         self.global_avg: float = self.g.query(
-            "MATCH ()-[r:RATED]->() RETURN avg(r.rating) AS glb_avg"
+            "MATCH ()-[r:RATED]->() RETURN avg(r.rating) AS glb_avg", timeout=TIMEOUT
         ).result_set[0][0]
 
     def _process_columns(self, df: pd.DataFrame) -> Dict[str, str]:
@@ -167,8 +170,8 @@ class FalkorDBRecommender:
             batch_size (int): Batch size for ingestion of ratings
         """
         # Create indices for fast lookup
-        self.g.query("CREATE INDEX ON :User(user_id)")
-        self.g.query("CREATE INDEX ON :Item(item_id)")
+        self.g.query("CREATE INDEX ON :User(user_id)", timeout=TIMEOUT)
+        self.g.query("CREATE INDEX ON :Item(item_id)", timeout=TIMEOUT)
 
         # Ingest users
         users = self.users_df.to_dict("records")
@@ -218,6 +221,7 @@ class FalkorDBRecommender:
         self.g.query(
             "MERGE (s:Schema {schema: $schema})",
             params={"schema": json.dumps(self.schema)},
+            timeout=TIMEOUT,
         )
 
         # Refresh schema for algorithms
@@ -591,6 +595,7 @@ class FalkorDBRecommender:
                 self.g.query(
                     "MATCH (rec:Item {item_id: $item_id}) RETURN rec",
                     params={"item_id": item_id},
+                    timeout=TIMEOUT,
                 )
                 .result_set[0][0]
                 .properties
