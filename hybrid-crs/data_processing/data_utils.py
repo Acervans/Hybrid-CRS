@@ -203,7 +203,7 @@ def process_listlike_columns(df: pd.DataFrame) -> pd.DataFrame:
         non_null = df[col].loc[~df[col].isnull()]
         if not non_null.empty:
             val = non_null.iloc[0]
-            if val[0] in "[(" and val[-1] == "])":
+            if val[0] in "[(" and val[-1] in "])":
                 df[col] = df[col].apply(
                     lambda x: (
                         " ".join(
