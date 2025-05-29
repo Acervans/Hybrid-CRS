@@ -1,4 +1,4 @@
-cd hybrid-crs/llm
+cd hybrid-crs
 
 # First stop the service
 docker compose down ollama

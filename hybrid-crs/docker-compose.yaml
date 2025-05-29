@@ -1,5 +1,9 @@
+include:
+  - llm/docker-compose.yaml
+  - frontend/docker-compose.yaml
+
 services:
-  hybrid-crs-api:
+  api:
     container_name: hybrid-crs-api
     build:
       context: .
@@ -23,7 +27,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
-volumes:
-  datasets: {}
-  models: {}
