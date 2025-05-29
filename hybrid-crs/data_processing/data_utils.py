@@ -10,6 +10,7 @@
 # TODO Let user see logs, download final dataset
 
 import os
+import re
 import numpy as np
 import fireducks.pandas as pd
 
@@ -31,7 +32,7 @@ DATATYPE_TEMPLATE = (
 )
 USER_HEADERS_TEMPLATE = "From these user table headers, discern which correspond to user id. Do NOT exclude suffixes."
 ITEM_HEADERS_TEMPLATE = "From these item table headers, discern which correspond to item id, name and category (optional). Do NOT exclude suffixes."
-INTER_HEADERS_TEMPLATE = "From these interaction table headers, discern which correspond to user id, item id, and rating. Do NOT exclude suffixes."
+INTER_HEADERS_TEMPLATE = "From these interaction table headers, discern which correspond to user id, item id, and rating (optional). Do NOT exclude suffixes."
 
 USER_ID_COL = "user_id:token"
 ITEM_ID_COL = "item_id:token"
@@ -55,7 +56,7 @@ class ItemHeaders(BaseModel):
 class InterHeaders(BaseModel):
     user_id_column: str
     item_id_column: str
-    rating_column: str
+    rating_column: str | None
 
 
 class DataType(BaseModel):
@@ -181,7 +182,39 @@ def normalize(values: np.ndarray, lower: float = 0.0, higher: float = 5.0):
     min_val = values.min()
     max_val = values.max()
 
+    if min_val == max_val:
+        return np.full_like(values, higher)
+
     return (values - min_val) / (max_val - min_val) * (higher - lower) + lower
+
+
+def process_listlike_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Converts list-like columns to a space-delimited sequential format.
+
+    Args:
+        df (pd.DataFrame): DataFrame to process
+
+    Returns:
+        pd.DataFrame: Processed DataFrame
+    """
+    seq_cols = [col for col in df.columns if col.split(":")[1].endswith("seq")]
+    for col in seq_cols:
+        non_null = df[col].loc[~df[col].isnull()]
+        if not non_null.empty:
+            val = non_null.iloc[0]
+            if val[0] in ["[("] and val[-1] == "])":
+                df[col] = df[col].apply(
+                    lambda x: (
+                        " ".join(
+                            x.replace(" ", "-")
+                            for x in re.split(r",\s*", re.sub(r"[\"']", "", x[1:-1]))
+                        )
+                        if x
+                        else x
+                    )
+                )
+    return df
 
 
 def clean_dataframe(
@@ -192,6 +225,7 @@ def clean_dataframe(
 ) -> pd.DataFrame:
     """
     Clean a DataFrame using the AutoClean library, excluding specified columns.
+    Also processes listlike sequential columns.
 
     Args:
         dataset (pd.DataFrame): DataFrame to clean
@@ -202,6 +236,7 @@ def clean_dataframe(
     Returns:
         pd.DataFrame: Cleaned DataFrame with preserved columns
     """
+    dataset = process_listlike_columns(dataset)
     clean_cols = [col for col in dataset.columns if col not in except_columns]
     if not isinstance(dataset, pd.core.frame.DataFrame):
         dataset = dataset.to_pandas()
@@ -210,9 +245,9 @@ def clean_dataframe(
         dataset,
         mode="manual",
         duplicates="auto",
-        missing_num="auto",
-        missing_categ="auto",
-        encode_categ="auto",
+        missing_num=False,
+        missing_categ=False,
+        encode_categ=False,
         extract_datetime="auto",
         outliers=False,
         logfile=logfile,
@@ -281,6 +316,11 @@ def process_dataset(
     inter_df = pd.read_csv(f"{dataset_filename}.inter", sep=sep)
     if inter_headers is None:
         inter_headers = get_inter_headers(inter_df.columns)
+
+    if inter_headers.rating_column is None:
+        inter_df[RATING_COL] = 5.0
+        inter_headers.rating_column = RATING_COL
+        normalize_ratings = False
 
     # Standardize interaction headers
     inter_df.rename(
