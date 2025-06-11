@@ -1,3 +1,7 @@
+""" API for HybridCRS. FastAPI backend for HybridCRS that powers LLM-based chat (Ollama),
+    web search, PDF parsing, agent workflows, and column inference for recommender systems.
+"""
+
 import os
 import shutil
 import sys
@@ -30,12 +34,22 @@ from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
 from supabase import create_client, Client
 
+from schemas import (
+    InferColumnRolesRequest,
+    InferFromSampleRequest,
+    CreateAgentRequest,
+    DeleteAgentRequest,
+    StartWorkflowRequest,
+    SendUserResponseRequest,
+)
+
 from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent
 from data_processing.data_utils import (
     get_datatype,
     get_inter_headers,
     get_item_headers,
     get_user_headers,
+    sniff_delimiter,
     normalize,
 )
 
@@ -159,6 +173,7 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
@@ -281,13 +296,77 @@ async def pdf_to_text(file: UploadFile):
     return Response(text)
 
 
+@app.post("/infer-column-roles")
+async def infer_column_roles(payload: InferColumnRolesRequest = Body(...)):
+    column_names = payload.column_names
+    file_type = payload.file_type
+
+    match (file_type):
+        case "interactions":
+            res = get_inter_headers(column_names)
+        case "users":
+            res = get_user_headers(column_names)
+        case "items":
+            res = get_item_headers(column_names)
+        case _:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type {file_type} is not supported",
+            )
+    rev_map = {v: k[:-7] for k, v in res.model_dump().items() if v is not None}
+    return JSONResponse(rev_map)
+
+
+@app.post("/infer-datatype")
+async def infer_datatype(payload: InferFromSampleRequest = Body(...)):
+    try:
+        datatype = get_datatype(payload.sample_values)
+        return JSONResponse(
+            {
+                "datatype": datatype,
+                "delimiter": (
+                    sniff_delimiter(payload.sample_values)
+                    if datatype.endswith("seq")
+                    else None
+                ),
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
+
+@app.post("/infer-delimiter")
+async def infer_delimiter(payload: InferFromSampleRequest = Body(...)):
+    try:
+        return JSONResponse({"delimiter": sniff_delimiter(payload.sample_values)})
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+
+
+@app.post("/create-agent")
+async def create_agent(payload: CreateAgentRequest = Body(...)):
+    # Check if exists in supabase and processing is True. Then create and process files + recommender
+    pass
+
+
+@app.delete("/delete-agent")
+async def delete_agent(payload: DeleteAgentRequest = Body(...)):
+    pass
+
+
 @app.post("/start-workflow")
-async def start_workflow(user_id: str, dataset_name: str):
+async def start_workflow(payload: StartWorkflowRequest = Body(...)):
     workflow_id = str(uuid.uuid4())
     wf = HybridCRSWorkflow(
         wid=workflow_id,
-        user_id=user_id,
-        dataset_name=dataset_name,
+        user_id=payload.user_id,
+        dataset_name=payload.dataset_name,
         timeout=300,
         verbose=True,
     )
@@ -326,9 +405,11 @@ async def start_workflow(user_id: str, dataset_name: str):
 
 
 @app.post("/send-user-response")
-async def send_user_response(data: dict = Body(...)) -> JSONResponse:
-    workflow_id = data.get("workflow_id")
-    user_response = data.get("user_response")
+async def send_user_response(
+    payload: SendUserResponseRequest = Body(...),
+) -> JSONResponse:
+    workflow_id = payload.workflow_id
+    user_response = payload.user_response
 
     # Get the workflow instance
     wf_dict = workflows.get(workflow_id, {})
