@@ -22,14 +22,14 @@ from typing import List, Literal
 
 MODEL = "qwen2.5:3b"
 
-DATATYPE_TEMPLATE = (
-    "From this list of sample data, give the datatype of said data. "
-    "Your options are: "
-    "'token' (SINGLE discrete value)"
-    "'token_seq' (SEQUENCE of discrete values)"
-    "'float' (SINGLE continuous value)"
-    "'float_seq' (SEQUENCE of continuous values)."
-)
+DATATYPE_TEMPLATE = """
+From this column of sample data, determine the datatype. Your options are: 
+'token': SINGLE discrete value (ID, genre...)
+'token_seq': SEQUENCE of discrete values (description, name, list of genres...)
+'float': SINGLE numerical value (price, timestamp...)
+'float_seq': SEQUENCE of numerical values (vector, array...).
+"""
+
 USER_HEADERS_TEMPLATE = "From these user table headers, discern which correspond to user id. Do NOT exclude suffixes."
 ITEM_HEADERS_TEMPLATE = "From these item table headers, discern which correspond to item id, name and category (optional). Do NOT exclude suffixes."
 INTER_HEADERS_TEMPLATE = "From these interaction table headers, discern which correspond to user id, item id, and rating (optional). Do NOT exclude suffixes."
@@ -156,7 +156,7 @@ def get_datatype(
             {
                 "role": "user",
                 "content": (
-                    f"{DATATYPE_TEMPLATE} Sample: \n{'\n'.join((f"{x}" for x in sample))}"
+                    f"{DATATYPE_TEMPLATE}\nSample: \n{'\n'.join((f"{x}" for x in sample))}"
                 ),
             }
         ],
@@ -258,19 +258,32 @@ def clean_dataframe(
     return pd.from_pandas(dataset)
 
 
-def sniff_delimiter(sample: str) -> str:
+def sniff_delimiter(sample: str | list[str]) -> str:
     """
-    Sniff the delimiter given a sample string.
+    Sniff the delimiter given a sample string or list of strings.
 
     Args:
-        sample (str): Sample string to analyze
+        sample (str | list[str]): Sample string or list of strings to analyze
 
     Returns:
         str: Detected delimiter
     """
     sniffer = Sniffer()
-    dialect = sniffer.sniff(sample)
-    return dialect.delimiter
+    if isinstance(sample, str):
+        try:
+            dialect = sniffer.sniff(sample)
+            return dialect.delimiter
+        except:
+            return ","
+    elif isinstance(sample, list):
+        count = dict()
+        for string in sample:
+            try:
+                dialect = sniffer.sniff(string)
+                count[dialect.delimiter] = count.get(dialect.delimiter, 0) + 1
+            except:
+                continue
+        return max(count.items(), key=lambda x: x[1])[0] if count else ","
 
 
 def process_dataset(
