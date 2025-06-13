@@ -3,31 +3,56 @@
 
 from fastapi import UploadFile
 from pydantic import BaseModel
+from typing import List, Optional
 
 
 class InferColumnRolesRequest(BaseModel):
-    column_names: list[str]
+    column_names: List[str]
     file_type: str
 
 
 class InferFromSampleRequest(BaseModel):
-    sample_values: list[str]
+    sample_values: List[str]
 
 
-class CreateAgentRequest(BaseModel):
+class Column(BaseModel):
+    id: int
+    name: str
+    role: str
+    data_type: str
+    delimiter: Optional[str]
+    original_name: str
+
+
+class SniffResult(BaseModel):
+    delimiter: str
+    has_header: bool
+    labels: List[str]
+    newline_str: str
+    quote_char: Optional[str]
+    total_rows: int
+
+
+class DatasetFile(BaseModel):
     id: str
     name: str
     original_name: str
-    file: UploadFile
+    file: Optional[UploadFile]
     file_type: str
-    headers: list[str] | None
-    columns: dict
-    sniff_result: dict
-    sample_data: list[list[str]]
+    headers: Optional[List[str]]
+    columns: List[Column]
+    sniff_result: SniffResult
+
+
+class AgentConfig(BaseModel):
+    agent_name: str
+    dataset_name: str
+    description: Optional[str]
+    public: bool
 
 
 class DeleteAgentRequest(BaseModel):
-    agent_id: str
+    agent_id: int
     user_id: str
     dataset_name: str
 

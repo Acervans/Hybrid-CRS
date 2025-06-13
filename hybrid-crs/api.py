@@ -18,12 +18,15 @@ import uuid
 from fastapi import (
     Body,
     FastAPI,
+    File,
+    Form,
     HTTPException,
     UploadFile,
 )
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
@@ -35,9 +38,10 @@ from duckduckgo_search.exceptions import DuckDuckGoSearchException
 from supabase import create_client, Client
 
 from schemas import (
+    AgentConfig,
+    DatasetFile,
     InferColumnRolesRequest,
     InferFromSampleRequest,
-    CreateAgentRequest,
     DeleteAgentRequest,
     StartWorkflowRequest,
     SendUserResponseRequest,
@@ -60,7 +64,33 @@ html2text.config.BODY_WIDTH = 0
 
 OLLAMA_API_URL = "http://127.0.0.1:11434/api"
 OLLAMA_API_PROXY = "/ollama/api/{endpoint}"
-REQUEST_TIMEOUT = 120.0
+OLLAMA_API_EXAMPLES = {
+    "get": {
+        "summary": "Empty Body",
+        "description": "Empty body for GET requests.",
+        "value": None,
+    },
+    "generate": {
+        "summary": "Generate Completion",
+        "description": "Example LLM generation, for endpoint 'generate'.",
+        "value": {
+            "model": "qwen2.5:3b",
+            "prompt": "How are you today?",
+            "stream": False,
+        },
+    },
+    "chat": {
+        "summary": "Generate Chat Completion",
+        "description": "Example LLM chat generation, for endpoint 'chat'.",
+        "value": {
+            "model": "qwen2.5:3b",
+            "messages": [{"role": "user", "content": "Why is the sky blue?"}],
+            "stream": False,
+        },
+    },
+}
+
+REQUEST_TIMEOUT = 240.0
 
 WEB_SEARCH_TIMEOUT = 10
 WEB_SEARCH_RESULTS = 2
@@ -154,7 +184,28 @@ app = FastAPI(
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Store the workflow instances in a dictionary
+
+# Swagger API Docs Auth
+def auth_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version="1.0",
+        summary=app.summary,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+    }
+    openapi_schema["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = auth_openapi
+
+# Store workflow instances in a dictionary
 workflows = {}
 
 # NOTE add frontend deployed url
@@ -211,36 +262,49 @@ async def verify_jwt(request: Request, call_next):
 @app.get(OLLAMA_API_PROXY)
 @app.post(OLLAMA_API_PROXY)
 @app.delete(OLLAMA_API_PROXY)
-async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
+async def ollama_api_proxy(
+    endpoint: str,
+    request: Request,
+    response: Response,
+    body: dict = Body(
+        default="",
+        description=(
+            "Body of the request. If method is GET, leave it empty. "
+            "Visit the [Ollama API documentation](https://github.com/ollama/ollama/blob/main/docs/api.md) for reference."
+        ),
+        media_type="application/json",
+        openapi_examples=OLLAMA_API_EXAMPLES,
+    ),
+):
     """Proxy for Ollama API requests
 
     - Args:
         - endpoint (str): Ollama API endpoint
         - request (Request): Request object with request data
         - response (Response): Response object with partial response
+        - body (dict): Body of the request if needed
 
     - Returns:
         - StreamingResponse | Response: response to Ollama API call
     """
     # Reverse proxy for Ollama API
     url: str = f"{OLLAMA_API_URL}/{endpoint}"
-    body: bytes = await request.body()
 
     # Perform Web Search with DuckDuckGo
     if request.headers.get("websearch") == "true":
-        context_body = json.loads(body)
-        web_results = await web_search(context_body["messages"][-1]["content"])
-        context_body["messages"][-1][
+        web_results = await web_search(body["messages"][-1]["content"])
+        body["messages"][-1][
             "content"
         ] += f"\n\nWeb search obtained these results, CITE THE SOURCES: \n{web_results}"
-        body = json.dumps(context_body).encode("utf-8")
+
+    body_str = json.dumps(body).encode("utf-8")
 
     async def streaming_response():
         async with httpx.AsyncClient() as client:
             async with client.stream(
                 method=request.method,
                 url=url,
-                data=body,
+                data=body_str,
                 params=request.query_params,
                 timeout=REQUEST_TIMEOUT,
             ) as stream_response:
@@ -253,7 +317,7 @@ async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
                 async for chunk in stream_response.aiter_bytes():
                     yield chunk
 
-    if len(body) > 0 and json.loads(body).get("stream", True):
+    if len(body) > 0 and body.get("stream", True):
         # Streaming reponse
         return StreamingResponse(streaming_response())
     else:
@@ -263,7 +327,7 @@ async def ollama_api_proxy(endpoint: str, request: Request, response: Response):
                 proxy = await client.request(
                     method=request.method,
                     url=url,
-                    data=body,
+                    data=body_str,
                     params=request.query_params,
                     timeout=REQUEST_TIMEOUT,
                 )
@@ -350,9 +414,58 @@ async def infer_delimiter(payload: InferFromSampleRequest = Body(...)):
 
 
 @app.post("/create-agent")
-async def create_agent(payload: CreateAgentRequest = Body(...)):
+async def create_agent(
+    agent_id: int = Form(...),
+    agent_config: str = Form(...),
+    dataset_files: list[str] = Form(...),
+    upload_files: list[UploadFile] = File(...),
+):
     # Check if exists in supabase and processing is True. Then create and process files + recommender
-    pass
+    try:
+        agent_config = AgentConfig.model_validate_json(agent_config)
+        dataset_files = [
+            DatasetFile.model_validate_json(file) for file in dataset_files
+        ]
+        for i in range(len(upload_files)):
+            dataset_files[i].file = upload_files[i]
+
+        # Validaciones
+        if not agent_config.agent_name.strip():
+            raise HTTPException(status_code=400, detail="Agent name is required")
+        if not agent_config.dataset_name.strip():
+            raise HTTPException(status_code=400, detail="Dataset name is required")
+
+        # Aquí iría tu lógica real: guardar config, entrenar, etc.
+        print(
+            "Creating recommendation agent:",
+            {
+                "agentId": agent_id,
+                "agentName": agent_config.agent_name,
+                "datasetName": agent_config.dataset_name,
+                "description": agent_config.description,
+                "files": [
+                    {
+                        "name": f.name,
+                        "type": f.file_type,
+                        "columns": [c.name for c in f.columns],
+                    }
+                    for f in dataset_files
+                ],
+            },
+        )
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": "Recommendation agent created successfully",
+                "agentId": agent_id,
+                "agentName": agent_config.agent_name,
+            }
+        )
+
+    except Exception as e:
+        print("Error creating agent:", str(e))
+        raise HTTPException(status_code=500, detail=f"Error creating agent: {e}")
 
 
 @app.delete("/delete-agent")
