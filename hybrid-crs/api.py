@@ -337,7 +337,7 @@ async def ollama_api_proxy(
 
 
 @app.post("/pdf-to-text")
-async def pdf_to_text(file: UploadFile):
+async def pdf_to_text(file: UploadFile) -> Response:
     """Extracts readable text from a PDF `file`
 
     - Args:
@@ -356,7 +356,17 @@ async def pdf_to_text(file: UploadFile):
 
 
 @app.post("/infer-column-roles")
-async def infer_column_roles(payload: InferColumnRolesRequest = Body(...)):
+async def infer_column_roles(
+    payload: InferColumnRolesRequest = Body(...),
+) -> JSONResponse:
+    """Infers column roles given names and file type
+
+    - Args:
+        - payload (InferColumnRolesRequest): Column names and file type
+
+    - Returns:
+        - JSONResponse: response with reverse mapping of inferred roles
+    """
     column_names = payload.column_names
     file_type = payload.file_type
 
@@ -377,7 +387,15 @@ async def infer_column_roles(payload: InferColumnRolesRequest = Body(...)):
 
 
 @app.post("/infer-datatype")
-async def infer_datatype(payload: InferFromSampleRequest = Body(...)):
+async def infer_datatype(payload: InferFromSampleRequest = Body(...)) -> JSONResponse:
+    """Infers data type given a sample of values
+
+    - Args:
+        - payload (InferFromSampleRequest): Sample values
+
+    - Returns:
+        - JSONResponse: response with datatype and delimiter if sequential type
+    """
     try:
         datatype = get_datatype(payload.sample_values)
         return JSONResponse(
@@ -398,7 +416,15 @@ async def infer_datatype(payload: InferFromSampleRequest = Body(...)):
 
 
 @app.post("/infer-delimiter")
-async def infer_delimiter(payload: InferFromSampleRequest = Body(...)):
+async def infer_delimiter(payload: InferFromSampleRequest = Body(...)) -> JSONResponse:
+    """Detects sequence delimiter given a sample of values
+
+    - Args:
+        - payload (InferFromSampleRequest): Sample values
+
+    - Returns:
+        - JSONResponse: response with delimiter
+    """
     try:
         return JSONResponse({"delimiter": sniff_delimiter(payload.sample_values)})
     except Exception as e:
@@ -414,7 +440,18 @@ async def create_agent(
     agent_config: str = Form(...),
     dataset_files: list[str] = Form(...),
     upload_files: list[UploadFile] = File(...),
-):
+) -> JSONResponse:
+    """Creates a recommendation agent with given configuration and dataset files
+
+    - Args:
+        - agent_id (int): List of sample values
+        - agent_config (str): Agent configuration as JSON string
+        - dataset_files (list[str]): List of dataset metadata as JSON strings
+        - upload_files (list[UploadFile]): List of dataset files
+
+    - Returns:
+        - JSONResponse: response with creation status
+    """
     # Check if exists in supabase and processing is True. Then create and process files + recommender
     try:
         agent_config = AgentConfig.model_validate_json(agent_config)
@@ -469,7 +506,17 @@ async def delete_agent(payload: DeleteAgentRequest = Body(...)):
 
 
 @app.post("/start-workflow")
-async def start_workflow(payload: StartWorkflowRequest = Body(...)):
+async def start_workflow(
+    payload: StartWorkflowRequest = Body(...),
+) -> StreamingResponse:
+    """Starts a workflow (conversation) with a recommendation agent
+
+    - Args:
+        - payload (StartWorkflowRequest): User ID and dataset name
+
+    - Returns:
+        - StreamingResponse: stream of workflow events
+    """
     workflow_id = str(uuid.uuid4())
     wf = HybridCRSWorkflow(
         wid=workflow_id,
@@ -516,6 +563,14 @@ async def start_workflow(payload: StartWorkflowRequest = Body(...)):
 async def send_user_response(
     payload: SendUserResponseRequest = Body(...),
 ) -> JSONResponse:
+    """Sends a user response to an ongoing workflow
+
+    - Args:
+        - payload (SendUserResponseRequest): Workflow ID and user response
+
+    - Returns:
+        - JSONResponse: response with send status
+    """
     workflow_id = payload.workflow_id
     user_response = payload.user_response
 
@@ -530,8 +585,10 @@ async def send_user_response(
             raise HTTPException(
                 status_code=404, detail=f"Handler for workflow {workflow_id} not found"
             )
-        handler.ctx.send_event(HumanResponseEvent(response=str(user_response)))
-        return JSONResponse({"status": "response received"})
+        handler.ctx.send_event(HumanResponseEvent(response=user_response))
+        return JSONResponse(
+            {"status": f"Workflow {workflow_id} received: '{user_response}'"}
+        )
     else:
         raise HTTPException(
             status_code=404,
