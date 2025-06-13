@@ -65,11 +65,6 @@ html2text.config.BODY_WIDTH = 0
 OLLAMA_API_URL = "http://127.0.0.1:11434/api"
 OLLAMA_API_PROXY = "/ollama/api/{endpoint}"
 OLLAMA_API_EXAMPLES = {
-    "get": {
-        "summary": "Empty Body",
-        "description": "Empty body for GET requests.",
-        "value": None,
-    },
     "generate": {
         "summary": "Generate Completion",
         "description": "Example LLM generation, for endpoint 'generate'.",
@@ -259,7 +254,7 @@ async def verify_jwt(request: Request, call_next):
         raise HTTPException(status_code=403, detail=f"Access denied: {e}")
 
 
-@app.get(OLLAMA_API_PROXY)
+@app.get(OLLAMA_API_PROXY, openapi_extra={"requestBody": None})
 @app.post(OLLAMA_API_PROXY)
 @app.delete(OLLAMA_API_PROXY)
 async def ollama_api_proxy(
@@ -267,10 +262,10 @@ async def ollama_api_proxy(
     request: Request,
     response: Response,
     body: dict = Body(
-        default="",
+        default={},
         description=(
-            "Body of the request. If method is GET, leave it empty. "
-            "Visit the [Ollama API documentation](https://github.com/ollama/ollama/blob/main/docs/api.md) for reference."
+            "Body of the request. Visit the [Ollama API documentation]"
+            "(https://github.com/ollama/ollama/blob/main/docs/api.md) for reference."
         ),
         media_type="application/json",
         openapi_examples=OLLAMA_API_EXAMPLES,
@@ -297,14 +292,14 @@ async def ollama_api_proxy(
             "content"
         ] += f"\n\nWeb search obtained these results, CITE THE SOURCES: \n{web_results}"
 
-    body_str = json.dumps(body).encode("utf-8")
+    body_bytes = json.dumps(body).encode("utf-8") if body else None
 
     async def streaming_response():
         async with httpx.AsyncClient() as client:
             async with client.stream(
                 method=request.method,
                 url=url,
-                data=body_str,
+                data=body_bytes,
                 params=request.query_params,
                 timeout=REQUEST_TIMEOUT,
             ) as stream_response:
@@ -327,7 +322,7 @@ async def ollama_api_proxy(
                 proxy = await client.request(
                     method=request.method,
                     url=url,
-                    data=body_str,
+                    data=body_bytes,
                     params=request.query_params,
                     timeout=REQUEST_TIMEOUT,
                 )
