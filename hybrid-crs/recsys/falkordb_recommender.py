@@ -29,11 +29,11 @@ class FalkorDBRecommender:
         clear: bool = True,
     ):
         """
-        Connect to FalkorDB, select (or create) graph, and ingest the dataset.
+        An explainable recommender using FalkorDB. Selects (or creates) a graph, and ingests the dataset.
 
         Args:
             dataset_name (str): Name of the dataset. Prefix of CSV file names and graph name in FalkorDB
-            dataset_dir (str): Folder containing directory with {dataset_name}.user, .item, .inter CSVs
+            dataset_dir (str): Folder containing dataset files such as {dataset_name}.user, .item, or .inter
             host,port,username,password: FalkorDB connection params
             clear (bool): Whether to clear existing data from FalkorDB
         """
@@ -61,7 +61,7 @@ class FalkorDBRecommender:
         sep = "\t"
         try:
             # Sniff delimiter from first rows
-            with open(f"{dataset_dir}/{dataset_name}/{dataset_name}.inter", "r") as f:
+            with open(f"{dataset_dir}/{dataset_name}.inter", "r") as f:
                 sniffer = Sniffer()
                 dialect = sniffer.sniff(f"{f.readline()}\n{f.readline()}")
                 sep = dialect.delimiter
@@ -71,11 +71,11 @@ class FalkorDBRecommender:
         # Ingest nodes & edges from CSV if empty
         if empty:
             self.inter_df = pd.read_csv(
-                f"{dataset_dir}/{dataset_name}/{dataset_name}.inter", sep=sep
+                f"{dataset_dir}/{dataset_name}.inter", sep=sep
             )
             try:
                 self.users_df = pd.read_csv(
-                    f"{dataset_dir}/{dataset_name}/{dataset_name}.user", sep=sep
+                    f"{dataset_dir}/{dataset_name}.user", sep=sep
                 )
             except FileNotFoundError:
                 self.users_df = pd.DataFrame(
@@ -83,7 +83,7 @@ class FalkorDBRecommender:
                 )
             try:
                 self.items_df = pd.read_csv(
-                    f"{dataset_dir}/{dataset_name}/{dataset_name}.item", sep=sep
+                    f"{dataset_dir}/{dataset_name}.item", sep=sep
                 )
             except FileNotFoundError:
                 self.items_df = pd.DataFrame(
@@ -109,7 +109,7 @@ class FalkorDBRecommender:
         else:
             self.inter_feats = self._process_columns(
                 pd.read_csv(
-                    f"{dataset_dir}/{dataset_name}/{dataset_name}.inter",
+                    f"{dataset_dir}/{dataset_name}.inter",
                     nrows=0,
                     sep=sep,
                 )
@@ -117,7 +117,7 @@ class FalkorDBRecommender:
             try:
                 self.user_feats = self._process_columns(
                     pd.read_csv(
-                        f"{dataset_dir}/{dataset_name}/{dataset_name}.user",
+                        f"{dataset_dir}/{dataset_name}.user",
                         nrows=0,
                         sep=sep,
                     )
@@ -127,7 +127,7 @@ class FalkorDBRecommender:
             try:
                 self.item_feats = self._process_columns(
                     pd.read_csv(
-                        f"{dataset_dir}/{dataset_name}/{dataset_name}.item",
+                        f"{dataset_dir}/{dataset_name}.item",
                         nrows=0,
                         sep=sep,
                     )
@@ -697,7 +697,7 @@ class FalkorDBRecommender:
 
 if __name__ == "__main__":
     dataset = "ml-10m"
-    datasets_folder = "../data_processing/datasets/processed"
+    datasets_folder = f"../data_processing/datasets/processed/{dataset}"
     frec = FalkorDBRecommender(dataset, datasets_folder, clear=False)
 
     res = frec.get_unique_feat_values("Item", "category")
