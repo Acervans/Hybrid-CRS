@@ -26,7 +26,7 @@ services:
       - 6379:6379
       - 3000:3000
     volumes:
-      - ./falkordb_storage:/data
+      - ./falkordb_storage:/var/lib/falkordb/data
     stdin_open: true
     tty: true
     restart: unless-stopped

@@ -53,9 +53,8 @@ class AgentConfig(BaseModel):
 
 class DeleteAgentRequest(BaseModel):
     agent_id: int
-    user_id: str
     dataset_name: str
-
+    user_id: str
 
 class StartWorkflowRequest(BaseModel):
     user_id: str
