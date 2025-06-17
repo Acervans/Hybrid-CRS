@@ -22,6 +22,7 @@ class FalkorDBRecommender:
         self,
         dataset_name: str,
         dataset_dir: str,
+        graph_name: str | None = None,
         host: str = "localhost",
         port: int = 6379,
         username: Optional[str] = None,
@@ -34,14 +35,16 @@ class FalkorDBRecommender:
         Args:
             dataset_name (str): Name of the dataset. Prefix of CSV file names and graph name in FalkorDB
             dataset_dir (str): Folder containing dataset files such as {dataset_name}.user, .item, or .inter
+            graph_name (str | None): Name of the graph. Uses `dataset_name` by default.
             host,port,username,password: FalkorDB connection params
             clear (bool): Whether to clear existing data from FalkorDB
         """
         self.dataset_name = dataset_name
+        self.graph_name = dataset_name if not graph_name else graph_name
 
         # Connect to FalkorDB and select graph
         self.db = FalkorDB(host=host, port=port, username=username, password=password)
-        self.g = self.db.select_graph(dataset_name)
+        self.g = self.db.select_graph(self.graph_name)
 
         try:
             empty = (
@@ -54,7 +57,7 @@ class FalkorDBRecommender:
             # Clear any existing data
             if clear:
                 self.g.delete()
-                self.g = self.db.select_graph(dataset_name)
+                self.g = self.db.select_graph(self.graph_name)
         except ResponseError:
             empty = True
 
@@ -104,7 +107,7 @@ class FalkorDBRecommender:
 
             self._ingest()
             print(
-                f"Created graph '{dataset_name}' with {len(self.users_df)} users, {len(self.items_df)} items and {len(self.inter_df)} interactions"
+                f"Created graph '{self.graph_name}' with {len(self.users_df)} users, {len(self.items_df)} items and {len(self.inter_df)} interactions"
             )
         else:
             self.inter_feats = self._process_columns(
@@ -208,7 +211,7 @@ class FalkorDBRecommender:
             )
 
         # Precompute PageRank for all Item nodes and store as a property
-        print(f"Executing PageRank over '{self.dataset_name}'...")
+        print(f"Executing PageRank over '{self.graph_name}'...")
         self.g.query(
             "CALL algo.pageRank(NULL, 'RATED') YIELD node, score "
             "WHERE node.item_id IS NOT NULL "
