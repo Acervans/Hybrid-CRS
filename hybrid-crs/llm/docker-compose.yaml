@@ -22,6 +22,8 @@ services:
   falkordb:
     image: falkordb/falkordb:latest
     container_name: falkordb
+    environment:
+      - FALKORDB_ARGS=MAX_QUEUED_QUERIES 50 TIMEOUT_MAX 300000 TIMEOUT_DEFAULT 300000
     ports:
       - 6379:6379
       - 3000:3000
