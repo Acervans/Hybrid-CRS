@@ -22,7 +22,7 @@ class FalkorDBRecommender:
         self,
         dataset_name: str,
         dataset_dir: str,
-        graph_name: str | None = None,
+        graph_name: Optional[str] = None,
         host: str = "localhost",
         port: int = 6379,
         username: Optional[str] = None,
@@ -35,7 +35,7 @@ class FalkorDBRecommender:
         Args:
             dataset_name (str): Name of the dataset. Prefix of CSV file names and graph name in FalkorDB
             dataset_dir (str): Folder containing dataset files such as {dataset_name}.user, .item, or .inter
-            graph_name (str | None): Name of the graph. Uses `dataset_name` by default.
+            graph_name (Optional[str]): Name of the graph. Uses `dataset_name` by default.
             host,port,username,password: FalkorDB connection params
             clear (bool): Whether to clear existing data from FalkorDB
         """
