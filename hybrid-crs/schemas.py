@@ -51,7 +51,7 @@ class AgentConfig(BaseModel):
     public: bool
 
 
-class DeleteAgentRequest(BaseModel):
+class AgentRequest(BaseModel):
     agent_id: int
     dataset_name: str
     user_id: str

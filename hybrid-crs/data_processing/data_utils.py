@@ -288,8 +288,8 @@ def sniff_delimiter(sample: str | list[str]) -> str:
 
 def process_dataset(
     dataset_name: str,
-    dataset_dir: str = "./datasets/raw",
-    output_dir: str = "./datasets/processed",
+    dataset_dir: str = "./datasets/raw/example",
+    output_dir: str = "./datasets/processed/example",
     user_headers: UserHeaders = None,
     item_headers: ItemHeaders = None,
     inter_headers: InterHeaders = None,
@@ -302,9 +302,9 @@ def process_dataset(
     Args:
         dataset_name (str): Name of the dataset to process
         dataset_dir (str): Directory containing raw dataset files.
-            Defaults to "./datasets/raw".
+            Defaults to "./datasets/raw/example".
         output_dir (str): Directory to store processed dataset files.
-            Defaults to "./datasets/processed".
+            Defaults to "./datasets/processed/example".
         user_headers (UserHeaders): Pre-identified user table headers.
             If None, they will be automatically identified. Defaults to None.
         item_headers (ItemHeaders): Pre-identified item table headers.
@@ -314,8 +314,7 @@ def process_dataset(
         normalize_ratings (bool): Whether to normalize rating values to
             the range [0.0, 5.0]. Defaults to True.
     """
-    dataset_filename = f"{dataset_dir}/{dataset_name}/{dataset_name}"
-    output_folder = f"{output_dir}/{dataset_name}"
+    dataset_filename = os.path.normpath(f"{dataset_dir}/{dataset_name}")
 
     sep = ","
     try:
@@ -386,18 +385,18 @@ def process_dataset(
             inter_df.loc[:, RATING_COL].values, lower=0.0, higher=5.0
         )
 
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder, exist_ok=True)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
 
     # Clean and save processed dataframes to output_dir
     print("Cleaning INTER DataFrame...")
     inter_df = clean_dataframe(inter_df)
-    inter_df.to_csv(f"{output_folder}/{dataset_name}.inter", sep=SEP, index=False)
+    inter_df.to_csv(f"{output_dir}/{dataset_name}.inter", sep=SEP, index=False)
     if users_df is not None:
         print("\nCleaning USER DataFrame...")
         users_df = clean_dataframe(users_df)
-        users_df.to_csv(f"{output_folder}/{dataset_name}.user", sep=SEP, index=False)
+        users_df.to_csv(f"{output_dir}/{dataset_name}.user", sep=SEP, index=False)
     if items_df is not None:
         print("\nCleaning ITEM DataFrame...")
         items_df = clean_dataframe(items_df)
-        items_df.to_csv(f"{output_folder}/{dataset_name}.item", sep=SEP, index=False)
+        items_df.to_csv(f"{output_dir}/{dataset_name}.item", sep=SEP, index=False)
