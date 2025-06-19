@@ -2,13 +2,6 @@
     Header standardization, data cleaning, normalization and type inference.
 """
 
-# TODO Use Sniffer's dialect to extract necessary info
-
-# TODO USER MUST INDICATE DATA TYPE OF EACH COLUMN, BUT PREVIEW WITH get_datatype
-
-# TODO Let user choose normalization for numericals, autoclean parameters???
-# TODO Let user see logs, download final dataset
-
 import os
 import re
 import numpy as np
@@ -18,7 +11,7 @@ from csv import Sniffer
 from AutoClean import AutoClean
 from ollama import chat
 from pydantic import BaseModel
-from typing import List, Literal
+from typing import List, Literal, Iterable
 
 MODEL = "qwen2.5:3b"
 
@@ -34,11 +27,11 @@ USER_HEADERS_TEMPLATE = "From these user table headers, discern which correspond
 ITEM_HEADERS_TEMPLATE = "From these item table headers, discern which correspond to item id, name and category (optional). Do NOT exclude suffixes."
 INTER_HEADERS_TEMPLATE = "From these interaction table headers, discern which correspond to user id, item id, and rating (optional). Do NOT exclude suffixes."
 
-USER_ID_COL = "user_id:token"
-ITEM_ID_COL = "item_id:token"
-ITEM_NAME_COL = "name:token_seq"
-ITEM_CATEGORY_COL = "category"
-RATING_COL = "rating:float"
+USER_ID = "user_id:token"
+ITEM_ID = "item_id:token"
+ITEM_NAME = "name:token_seq"
+ITEM_CATEGORY = "category"
+RATING = "rating:float"
 
 SEP = "\t"
 
@@ -219,7 +212,7 @@ def process_listlike_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def clean_dataframe(
     dataset: pd.DataFrame,
-    except_columns: List[str] = [USER_ID_COL, ITEM_ID_COL],
+    except_columns: Iterable[str] = (USER_ID, ITEM_ID),
     logfile: bool = False,
     verbose: bool = True,
 ) -> pd.DataFrame:
@@ -229,7 +222,7 @@ def clean_dataframe(
 
     Args:
         dataset (pd.DataFrame): DataFrame to clean
-        except_columns (List[str]): List of column names to exclude from cleaning
+        except_columns (Iterable[str]): Column names to exclude from cleaning
         logfile (bool): Whether to generate a log file of the cleaning operations
         verbose (bool): Whether to print verbose output during cleaning
 
@@ -237,7 +230,7 @@ def clean_dataframe(
         pd.DataFrame: Cleaned DataFrame with preserved columns
     """
     dataset = process_listlike_columns(dataset)
-    clean_cols = [col for col in dataset.columns if col not in except_columns]
+    clean_cols = [col for col in dataset.columns if col not in set(except_columns)]
     if not isinstance(dataset, pd.core.frame.DataFrame):
         dataset = dataset.to_pandas()
 
@@ -314,7 +307,13 @@ def process_dataset(
         normalize_ratings (bool): Whether to normalize rating values to
             the range [0.0, 5.0]. Defaults to True.
     """
+
+    def replace_datatype(left_colname: str, right_colname: str, default: str = "token"):
+        dtype = right_colname.split(":")[1] if ":" in right_colname else default
+        return f"{left_colname.split(":")[0]}:{dtype}"
+
     dataset_filename = os.path.normpath(f"{dataset_dir}/{dataset_name}")
+    inter_infer = user_infer = item_infer = False
 
     sep = ","
     try:
@@ -328,18 +327,32 @@ def process_dataset(
     inter_df = pd.read_csv(f"{dataset_filename}.inter", sep=sep)
     if inter_headers is None:
         inter_headers = get_inter_headers(inter_df.columns)
+        inter_infer = True
 
     if inter_headers.rating_column is None:
-        inter_df[RATING_COL] = 5.0
-        inter_headers.rating_column = RATING_COL
+        inter_df[RATING] = 5.0
+        inter_headers.rating_column = RATING
         normalize_ratings = False
 
     # Standardize interaction headers
+    rating_col = (
+        replace_datatype(RATING, inter_headers.rating_column, "float")
+        if not inter_infer
+        else RATING
+    )
     inter_df.rename(
         columns={
-            inter_headers.user_id_column: USER_ID_COL,
-            inter_headers.item_id_column: ITEM_ID_COL,
-            inter_headers.rating_column: RATING_COL,
+            inter_headers.user_id_column: (
+                replace_datatype(USER_ID, inter_headers.user_id_column, "token")
+                if not inter_infer
+                else USER_ID
+            ),
+            inter_headers.item_id_column: (
+                replace_datatype(ITEM_ID, inter_headers.item_id_column, "token")
+                if not inter_infer
+                else ITEM_ID
+            ),
+            inter_headers.rating_column: rating_col,
         },
         inplace=True,
     )
@@ -348,10 +361,18 @@ def process_dataset(
         users_df = pd.read_csv(f"{dataset_filename}.user", sep=sep)
         if user_headers is None:
             user_headers = get_user_headers(users_df.columns)
+            user_infer = True
 
         # Standardize user headers
         users_df.rename(
-            columns={user_headers.user_id_column: USER_ID_COL}, inplace=True
+            columns={
+                user_headers.user_id_column: (
+                    replace_datatype(USER_ID, user_headers.user_id_column, "token")
+                    if not user_infer
+                    else USER_ID
+                )
+            },
+            inplace=True,
         )
     except FileNotFoundError:
         users_df = None
@@ -360,16 +381,26 @@ def process_dataset(
         items_df = pd.read_csv(f"{dataset_filename}.item", sep=sep)
         if item_headers is None:
             item_headers = get_item_headers(items_df.columns)
+            item_infer = True
 
         # Standardize item headers
         rename_cols = {
-            item_headers.item_id_column: ITEM_ID_COL,
-            item_headers.name_column: ITEM_NAME_COL,
+            item_headers.item_id_column: (
+                replace_datatype(ITEM_ID, item_headers.item_id_column, "token")
+                if not item_infer
+                else ITEM_ID
+            ),
+            item_headers.name_column: (
+                replace_datatype(ITEM_NAME, item_headers.name_column, "token_seq")
+                if not item_infer
+                else ITEM_NAME
+            ),
         }
         if item_headers.category_column is not None:
-            is_seq = item_headers.category_column.endswith("token_seq")
-            rename_cols[item_headers.category_column] = (
-                f"{ITEM_CATEGORY_COL}:{"token_seq" if is_seq else "token"}"
+            rename_cols[item_headers.category_column] = replace_datatype(
+                ITEM_CATEGORY,
+                item_headers.category_column,
+                "token"
             )
         items_df.rename(
             columns=rename_cols,
@@ -379,10 +410,10 @@ def process_dataset(
         items_df = None
 
     # Normalize ratings between 0 and 5
-    if normalize_ratings and inter_df.loc[:, RATING_COL].max() != 5.0:
+    if normalize_ratings and inter_df.loc[:, rating_col].max() != 5.0:
         print("Normalizing ratings between 0 and 5...")
-        inter_df.loc[:, RATING_COL] = normalize(
-            inter_df.loc[:, RATING_COL].values, lower=0.0, higher=5.0
+        inter_df.loc[:, rating_col] = normalize(
+            inter_df.loc[:, rating_col].values, lower=0.0, higher=5.0
         )
 
     if not os.path.exists(output_dir):

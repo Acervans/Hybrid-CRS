@@ -1,3 +1,4 @@
+import os
 import sys
 import torch
 import torch.distributed as dist
@@ -5,7 +6,9 @@ import numpy as np
 import warnings
 import pathlib
 import importlib
+import itertools
 
+from collections import OrderedDict
 from torch import load, cuda, device
 from logging import getLogger
 
@@ -319,10 +322,177 @@ def get_recommendations(
     return recs
 
 
-if __name__ == "__main__":
-    run_recbole(
-        "EASE", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
+def prepare_dataset(
+    model: str,
+    config_file: str,
+    config_dict: dict,
+    dataset_name: str | None = None
+):
+    """Prepares dataset and data splits once for reuse."""
+    if dataset_name:
+        config_dict['dataset'] = dataset_name
+    config = Config(model=model, config_file_list=[config_file], config_dict=config_dict)
+    init_seed(config['seed'], config['reproducibility'])
+    dataset = create_dataset(config)
+    train_data, valid_data, test_data = data_preparation(config, dataset)
+    return dataset, train_data, valid_data, test_data
+
+
+def build_trainer(
+    model: str,
+    config_file: str,
+    base_config_dict: dict,
+    overrides: dict,
+    train_data
+):
+    """Build trainer with given config overrides."""
+    config_dict = {**base_config_dict, **overrides}
+    config = Config(model=model, config_file_list=[config_file], config_dict=config_dict)
+    init_seed(config['seed'], config['reproducibility'])
+
+    model_cls = get_model(model)
+    model_inst = model_cls(config, train_data.dataset).to(config['device'])
+
+    trainer_cls = get_trainer(config['MODEL_TYPE'], model)
+    trainer = trainer_cls(config, model_inst)
+
+    return config, trainer
+
+
+def retrain_on_dataset(
+    model: str,
+    config_file: str,
+    best_params: dict,
+    dataset_name: str | None = None,
+    valid_set: Dataset | None = None,
+    save_best_model_path: str | None = None
+):
+    """Retrain model on full dataset and save if path is given."""
+    config_dict = {
+        'model': model,
+        **best_params,
+        'saved': True,
+        'load_best_model': True,
+        'eval_args': {
+            'split': {'RS': [1.0, 0.0, 0.0]},
+            'order': 'RO',
+            'group_by': 'user',
+            'mode': 'full'
+        }
+    }
+    if save_best_model_path:
+        config_dict['checkpoint_dir'] = os.path.dirname(save_best_model_path)
+
+    config = Config(model=model, dataset=dataset_name, config_file_list=[config_file], config_dict=config_dict)
+    init_seed(config['seed'], config['reproducibility'])
+
+    dataset = create_dataset(config)
+    train_data, _, _ = data_preparation(config, dataset)
+
+    model_cls = get_model(model)
+    model_inst = model_cls(config, train_data.dataset).to(config['device'])
+
+    trainer_cls = get_trainer(config['MODEL_TYPE'], model)
+    trainer = trainer_cls(config, model_inst)
+
+    if save_best_model_path:
+        os.makedirs(os.path.dirname(save_best_model_path), exist_ok=True)
+        trainer.saved_model_file = save_best_model_path
+
+    # Fit on full dataset, validate on valid set used for hyperparam searching
+    _, scores = trainer.fit(train_data, valid_set, saved=True)
+
+    print(f"Final model saved at: {save_best_model_path}")
+
+    return scores
+
+
+def hyperparam_exhaustive_search(
+    model: str,
+    config_file: str,
+    param_grid: dict,
+    dataset_name: str | None = None,
+    save_best_model_path: str | None = None,
+) -> tuple[dict, OrderedDict]:
+    """
+    Manually performs exhaustive grid search for RecBole models.
+
+    Args:
+        model (str): Model name (e.g., "EASE")
+        config_file (str): Path to RecBole YAML config file
+        param_grid (dict): Dict of hyperparameter choices
+        dataset_name (str | None): Dataset name in place of config dataset
+        save_best_model_path (str | None): Path to save the best model (if any)
+
+    Returns:
+        tuple[dict, OrderedDict]: Best hyperparameters and best test scores
+    """
+    base_config_dict = {'model': model}
+    _dataset, train_data, valid_data, _ = prepare_dataset(
+        model, config_file, base_config_dict, dataset_name
     )
+
+    best_score = None
+    best_params = None
+
+    for values in itertools.product(*param_grid.values()):
+        param_comb = dict(zip(param_grid.keys(), values))
+        print(f"Testing params: {param_comb}")
+
+        _config, trainer = build_trainer(
+            model=model,
+            config_file=config_file,
+            base_config_dict=base_config_dict,
+            overrides={
+                **param_comb,
+                'saved': False,
+                'load_best_model': False
+            },
+            train_data=train_data
+        )
+
+        val_score, scores = trainer.fit(train_data, valid_data, saved=False)
+
+        if best_score is None or val_score > best_score:
+            best_score = val_score
+            best_params = param_comb
+
+        print(f"Validation score: {val_score}")
+        print(f"Scores: {scores}")
+        print("-" * 40)
+
+    print(f"Best params found: {best_params}")
+    print("Retraining on full dataset...")
+
+    test_result = retrain_on_dataset(
+        model=model,
+        dataset_name=dataset_name,
+        valid_set=valid_data,
+        config_file=config_file,
+        best_params=best_params,
+        save_best_model_path=save_best_model_path
+    )
+
+    print("Test result:", test_result)
+    return best_params, test_result
+
+
+if __name__ == "__main__":
+    # run_recbole(
+    #     "EASE", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
+    # )
+
+    best_params, test_scores = hyperparam_exhaustive_search(
+        model="EASE",
+        config_file="config/generic.yaml",
+        param_grid={"reg_weight": [1.0, 10.0, 100.0, 250.0, 500.0, 1000.0]},
+        dataset_name="ml-100k",
+        save_best_model_path="saved/ease-best.pth",
+    )
+    print("Best params:", best_params)
+    print("Test scores:", test_scores)
+
+    # hyperopt_tuning("EASE", ['config/generic.yaml'], 'ease.hyper', algo="exhaustive")
 
     # config, model, dataset, _train_set, _valid_set, _test_set = load_data_and_model(
     #     load_model='./saved/EASE-May-22-2025_04-34-38.pth',
