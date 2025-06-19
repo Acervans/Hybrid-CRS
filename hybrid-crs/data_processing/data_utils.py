@@ -7,7 +7,7 @@ import re
 import numpy as np
 import fireducks.pandas as pd
 
-from csv import Sniffer
+from csv import Sniffer, QUOTE_MINIMAL
 from AutoClean import AutoClean
 from ollama import chat
 from pydantic import BaseModel
@@ -398,9 +398,7 @@ def process_dataset(
         }
         if item_headers.category_column is not None:
             rename_cols[item_headers.category_column] = replace_datatype(
-                ITEM_CATEGORY,
-                item_headers.category_column,
-                "token"
+                ITEM_CATEGORY, item_headers.category_column, "token"
             )
         items_df.rename(
             columns=rename_cols,
@@ -422,12 +420,30 @@ def process_dataset(
     # Clean and save processed dataframes to output_dir
     print("Cleaning INTER DataFrame...")
     inter_df = clean_dataframe(inter_df)
-    inter_df.to_csv(f"{output_dir}/{dataset_name}.inter", sep=SEP, index=False)
+    inter_df.to_csv(
+        f"{output_dir}/{dataset_name}.inter",
+        sep=SEP,
+        index=False,
+        quoting=QUOTE_MINIMAL,
+        escapechar="\\"
+    )
     if users_df is not None:
         print("\nCleaning USER DataFrame...")
         users_df = clean_dataframe(users_df)
-        users_df.to_csv(f"{output_dir}/{dataset_name}.user", sep=SEP, index=False)
+        users_df.to_csv(
+            f"{output_dir}/{dataset_name}.user",
+            sep=SEP,
+            index=False,
+            quoting=QUOTE_MINIMAL,
+            escapechar="\\"
+        )
     if items_df is not None:
         print("\nCleaning ITEM DataFrame...")
         items_df = clean_dataframe(items_df)
-        items_df.to_csv(f"{output_dir}/{dataset_name}.item", sep=SEP, index=False)
+        items_df.to_csv(
+            f"{output_dir}/{dataset_name}.item",
+            sep=SEP,
+            index=False,
+            quoting=QUOTE_MINIMAL,
+            escapechar="\\"
+        )
