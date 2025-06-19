@@ -323,37 +323,34 @@ def get_recommendations(
 
 
 def prepare_dataset(
-    model: str,
-    config_file: str,
-    config_dict: dict,
-    dataset_name: str | None = None
+    model: str, config_file: str, config_dict: dict, dataset_name: str | None = None
 ):
     """Prepares dataset and data splits once for reuse."""
     if dataset_name:
-        config_dict['dataset'] = dataset_name
-    config = Config(model=model, config_file_list=[config_file], config_dict=config_dict)
-    init_seed(config['seed'], config['reproducibility'])
+        config_dict["dataset"] = dataset_name
+    config = Config(
+        model=model, config_file_list=[config_file], config_dict=config_dict
+    )
+    init_seed(config["seed"], config["reproducibility"])
     dataset = create_dataset(config)
     train_data, valid_data, test_data = data_preparation(config, dataset)
     return dataset, train_data, valid_data, test_data
 
 
 def build_trainer(
-    model: str,
-    config_file: str,
-    base_config_dict: dict,
-    overrides: dict,
-    train_data
+    model: str, config_file: str, base_config_dict: dict, overrides: dict, train_data
 ):
     """Build trainer with given config overrides."""
     config_dict = {**base_config_dict, **overrides}
-    config = Config(model=model, config_file_list=[config_file], config_dict=config_dict)
-    init_seed(config['seed'], config['reproducibility'])
+    config = Config(
+        model=model, config_file_list=[config_file], config_dict=config_dict
+    )
+    init_seed(config["seed"], config["reproducibility"])
 
     model_cls = get_model(model)
-    model_inst = model_cls(config, train_data.dataset).to(config['device'])
+    model_inst = model_cls(config, train_data.dataset).to(config["device"])
 
-    trainer_cls = get_trainer(config['MODEL_TYPE'], model)
+    trainer_cls = get_trainer(config["MODEL_TYPE"], model)
     trainer = trainer_cls(config, model_inst)
 
     return config, trainer
@@ -363,36 +360,43 @@ def retrain_on_dataset(
     model: str,
     config_file: str,
     best_params: dict,
+    config_dict: dict | None = None,
     dataset_name: str | None = None,
     valid_set: Dataset | None = None,
-    save_best_model_path: str | None = None
+    save_best_model_path: str | None = None,
 ):
     """Retrain model on full dataset and save if path is given."""
     config_dict = {
-        'model': model,
+        "model": model,
         **best_params,
-        'saved': True,
-        'load_best_model': True,
-        'eval_args': {
-            'split': {'RS': [1.0, 0.0, 0.0]},
-            'order': 'RO',
-            'group_by': 'user',
-            'mode': 'full'
-        }
+        **(config_dict if config_dict else {}),
+        "saved": True,
+        "load_best_model": True,
+        "eval_args": {
+            "split": {"RS": [1.0, 0.0, 0.0]},
+            "order": "RO",
+            "group_by": "user",
+            "mode": "full",
+        },
     }
     if save_best_model_path:
-        config_dict['checkpoint_dir'] = os.path.dirname(save_best_model_path)
+        config_dict["checkpoint_dir"] = os.path.dirname(save_best_model_path)
 
-    config = Config(model=model, dataset=dataset_name, config_file_list=[config_file], config_dict=config_dict)
-    init_seed(config['seed'], config['reproducibility'])
+    config = Config(
+        model=model,
+        dataset=dataset_name,
+        config_file_list=[config_file],
+        config_dict=config_dict,
+    )
+    init_seed(config["seed"], config["reproducibility"])
 
     dataset = create_dataset(config)
     train_data, _, _ = data_preparation(config, dataset)
 
     model_cls = get_model(model)
-    model_inst = model_cls(config, train_data.dataset).to(config['device'])
+    model_inst = model_cls(config, train_data.dataset).to(config["device"])
 
-    trainer_cls = get_trainer(config['MODEL_TYPE'], model)
+    trainer_cls = get_trainer(config["MODEL_TYPE"], model)
     trainer = trainer_cls(config, model_inst)
 
     if save_best_model_path:
@@ -411,6 +415,7 @@ def hyperparam_exhaustive_search(
     model: str,
     config_file: str,
     param_grid: dict,
+    config_dict: dict | None = None,
     dataset_name: str | None = None,
     save_best_model_path: str | None = None,
 ) -> tuple[dict, OrderedDict]:
@@ -421,15 +426,16 @@ def hyperparam_exhaustive_search(
         model (str): Model name (e.g., "EASE")
         config_file (str): Path to RecBole YAML config file
         param_grid (dict): Dict of hyperparameter choices
+        config_dict (dict | None): Additional configuration parameters
         dataset_name (str | None): Dataset name in place of config dataset
         save_best_model_path (str | None): Path to save the best model (if any)
 
     Returns:
         tuple[dict, OrderedDict]: Best hyperparameters and best test scores
     """
-    base_config_dict = {'model': model}
+    config_dict = {"model": model, **(config_dict if config_dict else {})}
     _dataset, train_data, valid_data, _ = prepare_dataset(
-        model, config_file, base_config_dict, dataset_name
+        model, config_file, config_dict, dataset_name
     )
 
     best_score = None
@@ -442,13 +448,9 @@ def hyperparam_exhaustive_search(
         _config, trainer = build_trainer(
             model=model,
             config_file=config_file,
-            base_config_dict=base_config_dict,
-            overrides={
-                **param_comb,
-                'saved': False,
-                'load_best_model': False
-            },
-            train_data=train_data
+            base_config_dict=config_dict,
+            overrides={**param_comb, "saved": False, "load_best_model": False},
+            train_data=train_data,
         )
 
         val_score, scores = trainer.fit(train_data, valid_data, saved=False)
@@ -469,8 +471,9 @@ def hyperparam_exhaustive_search(
         dataset_name=dataset_name,
         valid_set=valid_data,
         config_file=config_file,
+        config_dict=config_dict,
         best_params=best_params,
-        save_best_model_path=save_best_model_path
+        save_best_model_path=save_best_model_path,
     )
 
     print("Test result:", test_result)
@@ -485,6 +488,7 @@ if __name__ == "__main__":
     best_params, test_scores = hyperparam_exhaustive_search(
         model="EASE",
         config_file="config/generic.yaml",
+        config_dict={"save_dataset": True, "dataset_save_path": "ml-100k-Dataset.pth"},
         param_grid={"reg_weight": [1.0, 10.0, 100.0, 250.0, 500.0, 1000.0]},
         dataset_name="ml-100k",
         save_best_model_path="saved/ease-best.pth",

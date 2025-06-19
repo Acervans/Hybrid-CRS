@@ -1,12 +1,8 @@
-data_path: ./data_processing/datasets/processed
-
-# dataset_save_path: saved/lastfm_recbole-dataset.pth
+data_path: ../data_processing/datasets/processed
 
 seed: 2025
 use_gpu: false
 device: cuda
-
-# numerical_features: [v, a, d, stsc]
 
 USER_ID_FIELD: user_id
 ITEM_ID_FIELD: item_id
