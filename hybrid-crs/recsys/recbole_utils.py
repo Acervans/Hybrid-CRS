@@ -11,10 +11,13 @@ import warnings
 import pathlib
 import importlib
 import itertools
+import recbole.trainer.trainer
 
 from collections import OrderedDict
 from torch import load, cuda, device
 from logging import getLogger
+
+from torch.utils.tensorboard import SummaryWriter
 
 from recbole.config import Config
 from recbole.data.dataloader import AbstractDataLoader
@@ -29,6 +32,7 @@ from recbole.utils import (
     set_color,
     get_flops,
     get_environment,
+    get_local_time,
 )
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -363,10 +367,24 @@ def prepare_dataset(
     return config, dataset
 
 
+def get_tensorboard(logger, log_dir: str = "recsys"):
+    """Adapted from recbole.utils.get_tensorboard to use sub-directory"""
+    base_path = f"{log_dir}/log_tensorboard"
+    dir_name = None
+    for handler in logger.handlers:
+        if hasattr(handler, "baseFilename"):
+            dir_name = os.path.basename(getattr(handler, "baseFilename")).split(".")[0]
+            break
+    if dir_name is None:
+        dir_name = "{}-{}".format("model", get_local_time())
+
+    dir_path = os.path.join(base_path, dir_name)
+    writer = SummaryWriter(dir_path)
+    return writer
+
+
 def build_trainer(
-    model: str,
-    config: Config,
-    dataset: Dataset,
+    model: str, config: Config, dataset: Dataset, tensorboard_log_dir: str = "recsys"
 ):
     """Builds and returns a RecBole Trainer using the given model name,
     configuration and dataset
@@ -375,6 +393,7 @@ def build_trainer(
         model (str): Name of the RecBole model
         config (Config): RecBole configuration object
         dataset (Dataset): RecBole dataset to train the model on
+        tensorboard_log_dir (str): Directory to write tensorboard logfiles into
 
     Returns:
         Trainer: RecBole Trainer instance for the specified model
@@ -385,6 +404,13 @@ def build_trainer(
     model_inst = model_cls(config, dataset).to(config["device"])
 
     trainer_cls = get_trainer(config["MODEL_TYPE"], model)
+
+    # Monkey patching to redirect logs
+    if tensorboard_log_dir:
+        recbole.trainer.trainer.get_tensorboard = lambda logger: get_tensorboard(
+            logger, tensorboard_log_dir
+        )
+
     trainer = trainer_cls(config, model_inst)
 
     return trainer
