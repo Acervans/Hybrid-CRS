@@ -4,7 +4,6 @@
 
 import os
 import shutil
-import sys
 import jwt
 import httpx
 import json
@@ -14,6 +13,8 @@ import asyncio
 import dotenv
 import logging
 import uuid
+import traceback
+import fireducks.pandas as pd
 
 from fastapi import (
     Body,
@@ -28,6 +29,11 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from falkordb import FalkorDB
+from redis.exceptions import ResponseError
+
+from supabase import create_client, Client
+
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import HumanResponseEvent
@@ -35,26 +41,39 @@ from llama_index.core.workflow import HumanResponseEvent
 from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
-from supabase import create_client, Client
+from io import StringIO
 
 from schemas import (
     AgentConfig,
     DatasetFile,
     InferColumnRolesRequest,
     InferFromSampleRequest,
-    DeleteAgentRequest,
+    AgentRequest,
     StartWorkflowRequest,
     SendUserResponseRequest,
 )
 
 from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent
+from recsys.falkordb_recommender import FalkorDBRecommender
+from recsys.recbole_utils import (
+    hyperparam_grid_search,
+    run_recbole,
+    parse_model,
+    load_data_and_model,
+)
 from data_processing.data_utils import (
+    InterHeaders,
+    UserHeaders,
+    ItemHeaders,
     get_datatype,
     get_inter_headers,
     get_item_headers,
     get_user_headers,
     sniff_delimiter,
-    normalize,
+    process_dataset,
+    clean_dataframe,
+    SEP,
+    QUOTE_MINIMAL,
 )
 
 dotenv.load_dotenv()
@@ -94,8 +113,10 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 
-Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
+EXPERT_MODEL = "EASE"
+HYPERPARAM_GRID = {"reg_weight": [1.0, 10.0, 100.0, 250.0, 500.0, 750.0, 1000.0]}
 
+Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
 
 # Setup logging functionality
 
@@ -169,6 +190,75 @@ async def web_search(
         return ["Failed to search the web"]
 
 
+def get_dataset_name(original_name: str, agent_id: int) -> str:
+    """Gets unique dataset name
+
+    - Args:
+        - original_name (str): Original name of the dataset in Supabase
+        - agent_id (int): Agent ID
+
+    - Returns:
+        - str: unique dataset name
+    """
+    return f"{"-".join(original_name.split()).lower()}-{agent_id}"
+
+
+def get_dataset_path(dataset_name: str, processed: bool = False) -> str:
+    """Gets dataset path from unique dataset name
+
+    - Args:
+        - dataset_name (str): Name of the dataset
+        - processed (bool, optional): Whether to get processed or raw path
+
+    Returns:
+        - str: path of an agents' dataset files
+    """
+    return f"./data_processing/datasets/{'processed' if processed else 'raw'}/{dataset_name}"
+
+
+def train_expert_model(
+    dataset_name: str,
+    model: str = EXPERT_MODEL,
+    param_grid: dict = HYPERPARAM_GRID,
+    delete_on_error: bool = True,
+) -> tuple[dict, dict]:
+    """Trains expert model using dataset_name with hyperparameter tuning
+
+    - Args:
+        - dataset_name (str): Name of the dataset
+        - model (str): Model to train
+        - param_grid (dict): Parameters to combine for tuning
+        - delete_on_error (bool): Whether to delete model and dataset on error
+
+    Returns:
+        - tuple[dict, dict]: best parameters and test scores
+    """
+    dataset_path = f"recsys/saved/{dataset_name}-Dataset.pth"
+    model_path = f"recsys/saved/{dataset_name}.pth"
+    try:
+        best_params, test_scores = hyperparam_grid_search(
+            model=model,
+            param_grid=param_grid,
+            config_file="recsys/config/generic.yaml",
+            config_dict={
+                "save_dataset": True,
+                "dataset_save_path": dataset_path,
+                "data_path": "./data_processing/datasets/processed",
+                "state": "CRITICAL",
+            },
+            dataset_name=dataset_name,
+            save_best_model_path=model_path,
+        )
+    except Exception as e:
+        if delete_on_error:
+            if os.path.exists(model_path):
+                os.remove(model_path)
+            if os.path.exists(dataset_path):
+                os.remove(dataset_path)
+        raise e
+    return best_params, test_scores
+
+
 ### API DEFINITION ###
 
 app = FastAPI(
@@ -178,6 +268,9 @@ app = FastAPI(
 
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Initialize FalkorDB client
+db = FalkorDB(host="localhost", port=6379)
 
 
 # Swagger API Docs Auth
@@ -236,8 +329,6 @@ async def verify_jwt(request: Request, call_next):
 
     token = auth_header.split(" ")[1]
     try:
-        # TODO # Extract user ID/email, restrict access to specific endpoints,
-        # restrict DB operations if JWT's user_id and row user_id dont match
         payload = jwt.decode(
             jwt=token,
             key=SUPABASE_JWT_SECRET,
@@ -436,6 +527,7 @@ async def infer_delimiter(payload: InferFromSampleRequest = Body(...)) -> JSONRe
 
 @app.post("/create-agent")
 async def create_agent(
+    request: Request,
     agent_id: int = Form(...),
     agent_config: str = Form(...),
     dataset_files: list[str] = Form(...),
@@ -450,59 +542,276 @@ async def create_agent(
         - upload_files (list[UploadFile]): List of dataset files
 
     - Returns:
-        - JSONResponse: response with creation status
+        - JSONResponse: response with agent data and model test scores
     """
-    # Check if exists in supabase and processing is True. Then create and process files + recommender
     try:
-        agent_config = AgentConfig.model_validate_json(agent_config)
-        dataset_files = [
+        # Agent existence validation
+        response = (
+            supabase.table("RecommenderAgent")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .single()
+            .execute()
+        )
+        metadata = response.data
+
+        # Author validation
+        assert request.state.jwt["sub"] == metadata["user_id"]
+
+        # Request validation
+        agent_config_obj: AgentConfig = AgentConfig.model_validate_json(agent_config)
+        dataset_files_obj: list[DatasetFile] = [
             DatasetFile.model_validate_json(file) for file in dataset_files
         ]
         for i in range(len(upload_files)):
-            dataset_files[i].file = upload_files[i]
+            dataset_files_obj[i].file = upload_files[i]
 
-        # Validaciones
-        if not agent_config.agent_name.strip():
+        if not agent_config_obj.agent_name.strip():
             raise HTTPException(status_code=400, detail="Agent name is required")
-        if not agent_config.dataset_name.strip():
+        if not agent_config_obj.dataset_name.strip():
             raise HTTPException(status_code=400, detail="Dataset name is required")
 
-        # Aquí iría tu lógica real: guardar config, entrenar, etc.
-        print(
-            "Creating recommendation agent:",
-            {
-                "agentId": agent_id,
-                "agentName": agent_config.agent_name,
-                "datasetName": agent_config.dataset_name,
-                "description": agent_config.description,
-                "files": [
-                    {
-                        "name": f.name,
-                        "type": f.file_type,
-                        "columns": [c.name for c in f.columns],
-                    }
-                    for f in dataset_files
-                ],
-            },
-        )
+        # Dataset path
+        dataset_name = get_dataset_name(agent_config_obj.dataset_name, agent_id)
+        dataset_path = get_dataset_path(dataset_name)
+        output_path = get_dataset_path(dataset_name, True)
+
+        shutil.rmtree(dataset_path, ignore_errors=True)
+        os.makedirs(dataset_path)
+
+        try:
+            dataset_roles = {}
+
+            # Process dataset files
+            for file_obj in dataset_files_obj:
+                headers = []
+                seq_col_delim = {}
+                roles_dict = {}
+
+                for i in range(len(file_obj.columns)):
+                    column = file_obj.columns[i]
+                    column.name = column.name.replace(":", "_").replace(" ", "_")
+                    processed_column_name = f"{column.name}:{column.data_type}"
+                    headers.append(processed_column_name)
+
+                    if column.data_type.endswith("seq"):
+                        seq_col_delim[i] = column.delimiter
+
+                    if column.role != "extra":
+                        roles_dict[f"{column.role}_column"] = processed_column_name
+
+                # Role headers + File extension by type
+                if file_obj.file_type == "interactions":
+                    roles_dict = InterHeaders.model_validate(roles_dict)
+                    ext = "inter"
+                elif file_obj.file_type == "users":
+                    roles_dict = UserHeaders.model_validate(roles_dict)
+                    ext = "user"
+                else:
+                    roles_dict = ItemHeaders.model_validate(roles_dict)
+                    ext = "item"
+
+                dataset_roles[file_obj.file_type] = roles_dict
+
+                # Parse contents as CSV
+                sniff = file_obj.sniff_result
+                df = pd.read_csv(
+                    StringIO(
+                        initial_value=(
+                            (await file_obj.file.read()).decode(
+                                "utf-8", errors="replace"
+                            )
+                        ),
+                        newline=sniff.newline_str,
+                    ),
+                    delimiter=sniff.delimiter,
+                    quotechar=sniff.quote_char or '"',
+                    lineterminator=sniff.newline_str,
+                    skiprows=1 if sniff.has_header else None,
+                    names=headers,
+                    on_bad_lines="warn",
+                )
+
+                # Normalize `*_seq` columns
+                for idx, orig_delim in seq_col_delim.items():
+                    col = headers[idx]
+                    if orig_delim != " ":
+                        df[col] = (
+                            df[col]
+                            .str.replace(" ", "-", regex=False)
+                            .replace(orig_delim, " ", regex=False)
+                        )
+
+                # Save raw dataset file
+                save_path = f"{dataset_path}/{dataset_name}.{ext}"
+                df.to_csv(
+                    save_path,
+                    sep=sniff.delimiter,
+                    quotechar=sniff.quote_char or '"',
+                    lineterminator=sniff.newline_str,
+                    index=False,
+                    header=True,
+                )
+
+                # Free some memory
+                del df
+
+            # Process and clean dataset files
+            process_dataset(
+                dataset_name=dataset_name,
+                dataset_dir=dataset_path,
+                output_dir=output_path,
+                user_headers=dataset_roles.get("users"),
+                item_headers=dataset_roles.get("items"),
+                inter_headers=dataset_roles.get("interactions"),
+            )
+
+            # Start FalkorDB graph training
+            FalkorDBRecommender(
+                dataset_name=dataset_name, dataset_dir=output_path, clear=True
+            )
+
+            # Start expert model training
+            _, test_scores = train_expert_model(
+                dataset_name=dataset_name,
+                model=EXPERT_MODEL,
+                param_grid=HYPERPARAM_GRID,
+                delete_on_error=True,
+            )
+
+        except Exception as e:
+            shutil.rmtree(dataset_path, ignore_errors=True)
+            shutil.rmtree(output_path, ignore_errors=True)
+            try:
+                db.select_graph(dataset_name).delete()
+            except ResponseError:
+                pass
+            raise e
+
+        # Delete unprocessed dataset files
+        shutil.rmtree(dataset_path, ignore_errors=True)
+
+        response = (
+            supabase.table("RecommenderAgent")
+            .update({"processed": True})
+            .eq("agent_id", agent_id)
+            .execute()
+        ).data[0]
 
         return JSONResponse(
-            content={
-                "success": True,
-                "message": "Recommendation agent created successfully",
-                "agentId": agent_id,
-                "agentName": agent_config.agent_name,
-            }
+            {"agentId": agent_id, "agentRow": response, "testScores": test_scores}
         )
 
     except Exception as e:
-        print("Error creating agent:", str(e))
+        # Delete from Supabase
+        supabase.table("RecommenderAgent").delete().eq("agent_id", agent_id).execute()
+
+        print("Error creating agent:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error creating agent: {e}")
 
 
 @app.delete("/delete-agent")
-async def delete_agent(payload: DeleteAgentRequest = Body(...)):
-    pass
+async def delete_agent(request: Request, payload: AgentRequest = Body(...)):
+    """Deletes a recommendation agent given agent ID and dataset name
+
+    - Args:
+        - payload (AgentRequest): Agent ID, dataset name & user ID
+    """
+    try:
+        # Author validation
+        assert request.state.jwt["sub"] == payload.user_id
+
+        agent_id = payload.agent_id
+
+        # Delete dataset
+        dataset_name = get_dataset_name(payload.dataset_name, agent_id)
+        proc_dataset_path = get_dataset_path(dataset_name, True)
+        raw_dataset_path = get_dataset_path(dataset_name, False)
+        shutil.rmtree(proc_dataset_path, ignore_errors=True)
+        shutil.rmtree(raw_dataset_path, ignore_errors=True)
+
+        # Delete graph
+        db.select_graph(dataset_name).delete()
+
+        # Delete model and model dataset
+        model_path = f"recsys/saved/{dataset_name}.pth"
+        dataset_path = f"recsys/saved/{dataset_name}-Dataset.pth"
+        if os.path.exists(model_path):
+            os.remove(model_path)
+        if os.path.exists(dataset_path):
+            os.remove(dataset_path)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting agent: {e}")
+
+
+@app.post("/retrain-agent")
+async def retrain_agent(request: Request, payload: AgentRequest = Body(...)):
+    """Retrains a recommendation agent given agent ID and dataset name
+
+    - Args:
+        - payload (AgentRequest): Agent ID, dataset name & user ID
+
+    - Returns:
+        - JSONResponse: response with agent data and model test scores
+    """
+    try:
+        # Author validation
+        assert request.state.jwt["sub"] == payload.user_id
+
+        agent_id = payload.agent_id
+        dataset_name = get_dataset_name(payload.dataset_name, agent_id)
+        dataset_path = get_dataset_path(dataset_name, True)
+
+        # Remove previous saved dataset
+        model_dataset_path = f"recsys/saved/{dataset_name}-Dataset.pth"
+        if os.path.exists(model_dataset_path):
+            os.remove(model_dataset_path)
+
+        # Clean dataset files
+        inter_dataset = f"{dataset_path}/{dataset_name}.inter"
+        user_dataset = f"{dataset_path}/{dataset_name}.user"
+        clean_dataframe(pd.read_csv(inter_dataset, sep=SEP), verbose=False).to_csv(
+            inter_dataset, sep=SEP, index=False, quoting=QUOTE_MINIMAL, escapechar="\\"
+        )
+        if os.path.exists(user_dataset):
+            clean_dataframe(pd.read_csv(user_dataset, sep=SEP), verbose=False).to_csv(
+                user_dataset,
+                sep=SEP,
+                index=False,
+                quoting=QUOTE_MINIMAL,
+                escapechar="\\",
+            )
+
+        # Retrain expert model
+        _, test_scores = train_expert_model(
+            dataset_name=dataset_name,
+            model=EXPERT_MODEL,
+            param_grid=HYPERPARAM_GRID,
+            delete_on_error=False,
+        )
+
+        # Update processed and new_sessions
+        response = (
+            supabase.table("RecommenderAgent")
+            .update({"processed": True, "new_sessions": 0})
+            .eq("agent_id", agent_id)
+            .execute()
+        ).data[0]
+
+        return JSONResponse(
+            {"agentId": agent_id, "agentRow": response, "testScores": test_scores}
+        )
+
+    except Exception as e:
+        # Cancel processing
+        (
+            supabase.table("RecommenderAgent")
+            .update({"processed": True})
+            .eq("agent_id", agent_id)
+            .execute()
+        )
+        raise HTTPException(status_code=500, detail=f"Error retraining agent: {e}")
 
 
 @app.post("/start-workflow")
