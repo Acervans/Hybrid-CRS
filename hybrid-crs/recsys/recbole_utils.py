@@ -1,3 +1,7 @@
+""" Utility functions for training, evaluating, and tuning RecBole recommendation models.
+    Supports model loading, full-sort prediction, and grid search hyperparameter optimization.
+"""
+
 import os
 import sys
 import torch
@@ -13,6 +17,7 @@ from torch import load, cuda, device
 from logging import getLogger
 
 from recbole.config import Config
+from recbole.data.dataloader import AbstractDataLoader
 from recbole.data.dataset import Interaction, Dataset
 from recbole.data import create_dataset, data_preparation
 from recbole.data.transform import construct_transform
@@ -244,7 +249,7 @@ def full_sort_scores(
     uid_inter: dict,
     batch_size: int = 4096,
 ) -> np.ndarray:
-    """Predicts scores of all tracks for a given user
+    """Predicts scores of all items for a given user
 
     Args:
         model (torch.nn.Module): Recommendation model
@@ -253,7 +258,7 @@ def full_sort_scores(
         batch_size (int): Number of items to process at once
 
     Returns:
-        np.ndarray: Predicted track scores
+        np.ndarray: Predicted item scores
     """
     item_feats = dataset.get_item_feature()
     scores = list()
@@ -269,14 +274,14 @@ def full_sort_scores(
 def scores_to_recommendations(
     scores: torch.Tensor | np.ndarray, dataset: Dataset, cutoff: int
 ) -> list[tuple]:
-    """Assigns respective tracks to the generated scores
+    """Assigns respective items to the generated scores
 
     Args:
-        scores (torch.Tensor | np.ndarray): Tracks' scores
-        cutoff (int): Number of tracks to recommend
+        scores (torch.Tensor | np.ndarray): Items' scores
+        cutoff (int): Number of items to recommend
 
     Returns:
-        list[tuple]: Recommendations (score, track_id)
+        list[tuple]: Recommendations (score, item_id)
     """
     if isinstance(scores, torch.Tensor):
         scores = scores.cpu().numpy().flatten()
@@ -289,7 +294,7 @@ def scores_to_recommendations(
 
 
 def get_recommendations(
-    user_id: int,
+    user_id: str,
     model: str,
     device: torch.device,
     dataset: Dataset,
@@ -303,12 +308,12 @@ def get_recommendations(
         model (torch.nn.Module): Recommendation model
         device (torch.device): Device where the model is loaded
         predict_args (dict): Additional recommendation arguments
-        cutoff (int): Number of tracks to recommend
+        cutoff (int): Number of items to recommend
 
     Returns:
-        list[tuple]: Recommendations (score, track_id)
+        list[tuple]: Recommendations (score, item_id)
     """
-    uid_series = torch.Tensor(dataset.token2id(dataset.uid_field, [str(user_id)]))
+    uid_series = torch.Tensor(dataset.token2id(dataset.uid_field, [user_id]))
 
     model.eval()
     uid_inter = {dataset.uid_field: uid_series}
@@ -323,65 +328,26 @@ def get_recommendations(
 
 
 def prepare_dataset(
-    model: str, config_file: str, config_dict: dict, dataset_name: str | None = None
-):
-    """Prepares dataset and data splits once for reuse."""
-    if dataset_name:
-        config_dict["dataset"] = dataset_name
-    config = Config(
-        model=model, config_file_list=[config_file], config_dict=config_dict
-    )
-    init_seed(config["seed"], config["reproducibility"])
-    dataset = create_dataset(config)
-    train_data, valid_data, test_data = data_preparation(config, dataset)
-    return dataset, train_data, valid_data, test_data
-
-
-def build_trainer(
-    model: str, config_file: str, base_config_dict: dict, overrides: dict, train_data
-):
-    """Build trainer with given config overrides."""
-    config_dict = {**base_config_dict, **overrides}
-    config = Config(
-        model=model, config_file_list=[config_file], config_dict=config_dict
-    )
-    init_seed(config["seed"], config["reproducibility"])
-
-    model_cls = get_model(model)
-    model_inst = model_cls(config, train_data.dataset).to(config["device"])
-
-    trainer_cls = get_trainer(config["MODEL_TYPE"], model)
-    trainer = trainer_cls(config, model_inst)
-
-    return config, trainer
-
-
-def retrain_on_dataset(
     model: str,
     config_file: str,
-    best_params: dict,
-    config_dict: dict | None = None,
+    config_dict: dict = {},
     dataset_name: str | None = None,
-    valid_set: Dataset | None = None,
-    save_best_model_path: str | None = None,
+    return_splits: bool = True,
 ):
-    """Retrain model on full dataset and save if path is given."""
-    config_dict = {
-        "model": model,
-        **best_params,
-        **(config_dict if config_dict else {}),
-        "saved": True,
-        "load_best_model": True,
-        "eval_args": {
-            "split": {"RS": [1.0, 0.0, 0.0]},
-            "order": "RO",
-            "group_by": "user",
-            "mode": "full",
-        },
-    }
-    if save_best_model_path:
-        config_dict["checkpoint_dir"] = os.path.dirname(save_best_model_path)
+    """Loads a RecBole dataset and returns train/valid/test splits
 
+    Args:
+        model (str): Name of the RecBole model
+        config_file (str): Path to the RecBole configuration file
+        config_dict (dict): Additional configuration parameters
+        dataset_name (str | None): Optional dataset name. If None, inferred from config.
+        return_splits (bool): Whether to return train/validation/test splits
+
+    Returns:
+        tuple: Config & Dataset objects + train/validation/test splits if `return_splits` is True
+    """
+    if dataset_name:
+        config_dict["dataset"] = dataset_name
     config = Config(
         model=model,
         dataset=dataset_name,
@@ -389,53 +355,131 @@ def retrain_on_dataset(
         config_dict=config_dict,
     )
     init_seed(config["seed"], config["reproducibility"])
-
     dataset = create_dataset(config)
-    train_data, _, _ = data_preparation(config, dataset)
+
+    if return_splits:
+        train_data, valid_data, test_data = data_preparation(config, dataset)
+        return config, dataset, train_data, valid_data, test_data
+    return config, dataset
+
+
+def build_trainer(
+    model: str,
+    config: Config,
+    dataset: Dataset,
+):
+    """Builds and returns a RecBole Trainer using the given model name,
+    configuration and dataset
+
+    Args:
+        model (str): Name of the RecBole model
+        config (Config): RecBole configuration object
+        dataset (Dataset): RecBole dataset to train the model on
+
+    Returns:
+        Trainer: RecBole Trainer instance for the specified model
+    """
+    init_seed(config["seed"], config["reproducibility"])
 
     model_cls = get_model(model)
-    model_inst = model_cls(config, train_data.dataset).to(config["device"])
+    model_inst = model_cls(config, dataset).to(config["device"])
 
     trainer_cls = get_trainer(config["MODEL_TYPE"], model)
     trainer = trainer_cls(config, model_inst)
 
-    if save_best_model_path:
+    return trainer
+
+
+def retrain_on_dataset(
+    model: str,
+    best_params: dict,
+    config_file: str,
+    config_dict: dict = {},
+    dataset_name: str | None = None,
+    valid_set: AbstractDataLoader | None = None,
+    save_best_model_path: str | None = None,
+) -> OrderedDict:
+    """Retrains a RecBole model on the full dataset with given hyperparameters
+
+    Args:
+        model (str): Name of the RecBole model to retrain
+        best_params (dict): Best hyperparameters from tuning or prior runs
+        config_file (str): Path to the RecBole configuration file
+        config_dict (dict): Additional configuration parameters
+        dataset_name (str | None): Optional dataset name. If None, inferred from config
+        valid_set (AbstractDataLoader | None): Optional validation set used during retraining
+        save_best_model_path (str | None): Path to save the retrained model. If None, the model is not saved.
+
+    Returns:
+        OrderedDict: Evaluation scores from validation during retraining.
+    """
+    saved = save_best_model_path is not None
+    config_dict = {
+        **best_params,
+        **config_dict,
+        "model": model,
+        "saved": saved,
+        "eval_args": {
+            "split": {"RS": [1.0, 0.0, 0.0]},
+            "order": "RO",
+            "group_by": "user",
+            "mode": "full",
+        },
+    }
+    if saved:
+        config_dict["checkpoint_dir"] = os.path.dirname(save_best_model_path)
+
+    config, _, full_data, _, _ = prepare_dataset(
+        model=model,
+        config_file=config_file,
+        config_dict=config_dict,
+        dataset_name=dataset_name,
+    )
+
+    trainer = build_trainer(model=model, config=config, dataset=full_data.dataset)
+
+    if saved:
         os.makedirs(os.path.dirname(save_best_model_path), exist_ok=True)
         trainer.saved_model_file = save_best_model_path
+        print(f"Final model saved at: {save_best_model_path}")
 
     # Fit on full dataset, validate on valid set used for hyperparam searching
-    _, scores = trainer.fit(train_data, valid_set, saved=True)
-
-    print(f"Final model saved at: {save_best_model_path}")
+    _, scores = trainer.fit(full_data, valid_set, saved=saved)
 
     return scores
 
 
-def hyperparam_exhaustive_search(
+def hyperparam_grid_search(
     model: str,
-    config_file: str,
     param_grid: dict,
-    config_dict: dict | None = None,
+    config_file: str,
+    config_dict: dict = {},
     dataset_name: str | None = None,
     save_best_model_path: str | None = None,
 ) -> tuple[dict, OrderedDict]:
     """
-    Manually performs exhaustive grid search for RecBole models.
+    Performs exhaustive grid search for RecBole models
 
     Args:
-        model (str): Model name (e.g., "EASE")
-        config_file (str): Path to RecBole YAML config file
+        model (str): Name of the RecBole model
         param_grid (dict): Dict of hyperparameter choices
-        config_dict (dict | None): Additional configuration parameters
+        config_file (str): Path to the RecBole configuration file
+        config_dict (dict): Additional configuration parameters
         dataset_name (str | None): Dataset name in place of config dataset
         save_best_model_path (str | None): Path to save the best model (if any)
 
     Returns:
         tuple[dict, OrderedDict]: Best hyperparameters and best test scores
     """
-    config_dict = {"model": model, **(config_dict if config_dict else {})}
-    _dataset, train_data, valid_data, _ = prepare_dataset(
-        model, config_file, config_dict, dataset_name
+    config_dict = {**config_dict, "model": model}
+    if save_best_model_path:
+        config_dict["checkpoint_dir"] = os.path.dirname(save_best_model_path)
+
+    tuning_config, _, train_data, valid_data, _ = prepare_dataset(
+        model=model,
+        config_file=config_file,
+        config_dict={**config_dict, "save_dataset": False},
+        dataset_name=dataset_name,
     )
 
     best_score = None
@@ -445,14 +489,16 @@ def hyperparam_exhaustive_search(
         param_comb = dict(zip(param_grid.keys(), values))
         print(f"Testing params: {param_comb}")
 
-        _config, trainer = build_trainer(
+        for key, value in param_comb.items():
+            tuning_config[key] = value
+
+        trainer = build_trainer(
             model=model,
-            config_file=config_file,
-            base_config_dict=config_dict,
-            overrides={**param_comb, "saved": False, "load_best_model": False},
-            train_data=train_data,
+            config=tuning_config,
+            dataset=train_data.dataset,
         )
 
+        # Don't save model during tuning
         val_score, scores = trainer.fit(train_data, valid_data, saved=False)
 
         if best_score is None or val_score > best_score:
@@ -485,7 +531,7 @@ if __name__ == "__main__":
     #     "EASE", dataset="ml-100k", config_file_list=["config/generic.yaml"], saved=False
     # )
 
-    best_params, test_scores = hyperparam_exhaustive_search(
+    best_params, test_scores = hyperparam_grid_search(
         model="EASE",
         config_file="config/generic.yaml",
         config_dict={"save_dataset": True, "dataset_save_path": "ml-100k-Dataset.pth"},
@@ -504,7 +550,7 @@ if __name__ == "__main__":
     # )
 
     # res = get_recommendations(
-    #     1,
+    #     "1",
     #     model,
     #     load_device,
     #     dataset,
@@ -517,7 +563,7 @@ if __name__ == "__main__":
     #     preload_dataset=dataset,
     # )
     # res = get_recommendations(
-    #     1,
+    #     "1",
     #     model,
     #     load_device,
     #     dataset,
