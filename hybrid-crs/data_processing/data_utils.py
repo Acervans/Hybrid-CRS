@@ -425,7 +425,7 @@ def process_dataset(
         sep=SEP,
         index=False,
         quoting=QUOTE_MINIMAL,
-        escapechar="\\"
+        escapechar="\\",
     )
     if users_df is not None:
         print("\nCleaning USER DataFrame...")
@@ -435,7 +435,7 @@ def process_dataset(
             sep=SEP,
             index=False,
             quoting=QUOTE_MINIMAL,
-            escapechar="\\"
+            escapechar="\\",
         )
     if items_df is not None:
         print("\nCleaning ITEM DataFrame...")
@@ -445,5 +445,5 @@ def process_dataset(
             sep=SEP,
             index=False,
             quoting=QUOTE_MINIMAL,
-            escapechar="\\"
+            escapechar="\\",
         )
