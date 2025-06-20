@@ -58,6 +58,8 @@ class AgentRequest(BaseModel):
 
 class StartWorkflowRequest(BaseModel):
     user_id: str
+    agent_id: int
+    agent_name: str
     dataset_name: str
 
 

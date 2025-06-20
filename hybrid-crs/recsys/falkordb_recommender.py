@@ -23,6 +23,7 @@ class FalkorDBRecommender:
         dataset_name: str,
         dataset_dir: str,
         graph_name: Optional[str] = None,
+        db: Optional[FalkorDB] = None,
         host: str = "localhost",
         port: int = 6379,
         username: Optional[str] = None,
@@ -36,6 +37,7 @@ class FalkorDBRecommender:
             dataset_name (str): Name of the dataset. Prefix of CSV file names and graph name in FalkorDB
             dataset_dir (str): Folder containing dataset files such as {dataset_name}.user, .item, or .inter
             graph_name (Optional[str]): Name of the graph. Uses `dataset_name` by default.
+            db (Optional[FalkorDB]): Optional existing FalkorDB connection
             host,port,username,password: FalkorDB connection params
             clear (bool): Whether to clear existing data from FalkorDB
         """
@@ -43,7 +45,7 @@ class FalkorDBRecommender:
         self.graph_name = dataset_name if not graph_name else graph_name
 
         # Connect to FalkorDB and select graph
-        self.db = FalkorDB(host=host, port=port, username=username, password=password)
+        self.db = db or FalkorDB(host=host, port=port, username=username, password=password)
         self.g = self.db.select_graph(self.graph_name)
 
         try:

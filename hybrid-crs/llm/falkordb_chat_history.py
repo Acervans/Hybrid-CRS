@@ -10,16 +10,17 @@ TIMEOUT = 5 * 1000 * 60  # 5 minutes
 
 class FalkorDBChatHistory:
 
-    def __init__(self, graph_name: str = "chat-history", **falkordb_kwargs):
+    def __init__(self, graph_name: str = "chat-history", db: FalkorDB | None = None, **falkordb_kwargs):
         """
-        Initializes the chat history storage.
+        Chat history storage using FalkorDB as graph database.
         Creates a graph if it doesn't exist.
 
         Args:
-            graph_name (str): Name of the graph to store chat history.
-            **falkordb_kwargs: Additional keyword arguments for FalkorDB connection.
+            graph_name (str): Name of the graph to store chat history
+            db (FalkorDB | None): Optional existing FalkorDB connection
+            **falkordb_kwargs: Additional keyword arguments for FalkorDB connection
         """
-        self.db = FalkorDB(host="localhost", port=6379, **falkordb_kwargs)
+        self.db = db or FalkorDB(host="localhost", port=6379, **falkordb_kwargs)
         self.g = self.db.select_graph(graph_name)
 
         try:
@@ -32,8 +33,8 @@ class FalkorDBChatHistory:
         Creates a new chat node with the full message history (JSON-encoded).
 
         Args:
-            chat_id (str): Unique identifier for the chat.
-            messages (list[dict]): List of messages in the chat.
+            chat_id (str): Unique identifier for the chat
+            messages (list[dict]): List of messages in the chat
         """
         content_json = json.dumps(messages)
         query = "CREATE (c:Chat {id: $chat_id, content: $content})"
@@ -46,9 +47,9 @@ class FalkorDBChatHistory:
         Retrieves the full message history for a chat ID.
 
         Args:
-            chat_id (str): Unique identifier for the chat.
+            chat_id (str): Unique identifier for the chat
         Returns:
-            list[dict]: List of messages in the chat, or None if not found.
+            list[dict]: List of messages in the chat, or None if not found
         """
         query = """
         MATCH (c:Chat {id: $chat_id})
@@ -66,8 +67,8 @@ class FalkorDBChatHistory:
         Appends a new message to an existing chat.
 
         Args:
-            chat_id (str): Unique identifier for the chat.
-            new_message (dict): The new message to append.
+            chat_id (str): Unique identifier for the chat
+            new_message (dict): The new message to append
         """
         query = """
         MATCH (c:Chat {id: $chat_id})
@@ -100,7 +101,7 @@ class FalkorDBChatHistory:
         Returns a list of all chat IDs and their content.
 
         Returns:
-            list[dict]: List of dictionaries with chat IDs and their messages.
+            list[dict]: List of dictionaries with chat IDs and their messages
         """
         query = "MATCH (c:Chat) RETURN c.id, c.content"
         result = self.g.query(query, timeout=TIMEOUT)
@@ -118,7 +119,7 @@ class FalkorDBChatHistory:
         Deletes a chat node.
 
         Args:
-            chat_id (str): Unique identifier for the chat to delete.
+            chat_id (str): Unique identifier for the chat to delete
         """
         query = """
         MATCH (c:Chat {id: $chat_id})

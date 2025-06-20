@@ -668,7 +668,7 @@ async def create_agent(
 
             # Start FalkorDB graph training
             FalkorDBRecommender(
-                dataset_name=dataset_name, dataset_dir=output_path, clear=True
+                dataset_name=dataset_name, dataset_dir=output_path, db=db, clear=True
             )
 
             # Start expert model training
@@ -821,17 +821,21 @@ async def start_workflow(
     """Starts a workflow (conversation) with a recommendation agent
 
     - Args:
-        - payload (StartWorkflowRequest): User ID and dataset name
+        - payload (StartWorkflowRequest): User ID, agent ID, agent name & dataset name
 
     - Returns:
         - StreamingResponse: stream of workflow events
     """
     workflow_id = str(uuid.uuid4())
+    dataset_name = get_dataset_name(payload.dataset_name, payload.agent_id)
+    dataset_path = get_dataset_path(dataset_name, True)
     wf = HybridCRSWorkflow(
         wid=workflow_id,
+        agent_name=payload.agent_name,
         user_id=payload.user_id,
         dataset_name=payload.dataset_name,
-        timeout=300,
+        dataset_dir=dataset_path,
+        timeout=REQUEST_TIMEOUT,
         verbose=True,
     )
 
