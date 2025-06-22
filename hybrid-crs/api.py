@@ -22,6 +22,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
 )
 from fastapi.requests import Request
@@ -45,6 +46,9 @@ from io import StringIO
 
 from schemas import (
     AgentConfig,
+    ChatHistoryRequest,
+    AppendChatHistoryRequest,
+    CreateChatHistoryRequest,
     DatasetFile,
     InferColumnRolesRequest,
     InferFromSampleRequest,
@@ -54,6 +58,7 @@ from schemas import (
 )
 
 from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent
+from llm.falkordb_chat_history import FalkorDBChatHistory
 from recsys.falkordb_recommender import FalkorDBRecommender
 from recsys.recbole_utils import (
     hyperparam_grid_search,
@@ -812,6 +817,105 @@ async def retrain_agent(request: Request, payload: AgentRequest = Body(...)):
             .execute()
         )
         raise HTTPException(status_code=500, detail=f"Error retraining agent: {e}")
+
+
+@app.post("/create-chat-history")
+async def create_chat_history(
+    request: Request,
+    payload: CreateChatHistoryRequest = Body(...),
+) -> JSONResponse:
+    """Creates a Chat History in the FalkorDB graph store
+
+    Args:
+        payload (CreateChatHistoryRequest): Chat ID, user ID and content
+
+    Returns:
+        JSONResponse: created Chat History
+    """
+    try:
+        # Author validation
+        assert request.state.jwt["sub"] == payload.user_id
+
+        chat_id = payload.chat_id
+        content = json.loads(payload.content)
+
+        ch = FalkorDBChatHistory(db=db)
+        ch.store_chat(chat_id, content)
+        return JSONResponse({"chatId": chat_id, "content": content})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating chat history: {e}")
+
+
+@app.put("/append-chat-history")
+async def append_chat_history(
+    request: Request,
+    payload: AppendChatHistoryRequest = Body(...),
+):
+    """Appends a message to an existing Chat History in the FalkorDB graph store
+
+    Args:
+        payload (AppendChatHistoryRequest): Chat ID, user ID and new message to append
+    """
+    try:
+        # Author validation
+        assert request.state.jwt["sub"] == payload.user_id
+
+        chat_id = payload.chat_id
+        new_message = payload.new_message
+
+        ch = FalkorDBChatHistory(db=db)
+        ch.append_message(chat_id, json.loads(new_message))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error appending to chat history: {e}"
+        )
+
+
+@app.get("/get-chat-history")
+async def get_chat_history(
+    request: Request, chat_id: int = Query(...), user_id: str = Query(...)
+) -> JSONResponse:
+    """Gets an existing Chat History's contents from the FalkorDB graph store
+
+    Args:
+        chat_id (int): Chat ID
+        user_id (str): User ID
+
+    Returns:
+        JSONResponse: list of chat messages
+    """
+    try:
+        # Author validation
+        assert request.state.jwt["sub"] == user_id
+
+        ch = FalkorDBChatHistory(db=db)
+        return JSONResponse(ch.get_chat(chat_id))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error retrieving chat history: {e}"
+        )
+
+
+@app.delete("/delete-chat-history")
+async def delete_chat_history(
+    request: Request,
+    payload: ChatHistoryRequest = Body(...),
+):
+    """Deletes a Chat History from the FalkorDB graph store
+
+    Args:
+        payload (ChatHistoryRequest): Chat ID and user ID
+    """
+    try:
+        # Author validation
+        assert request.state.jwt["sub"] == payload.user_id
+
+        chat_id = payload.chat_id
+
+        ch = FalkorDBChatHistory(db=db)
+        ch.delete_chat(chat_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting chat history: {e}")
 
 
 @app.post("/start-workflow")

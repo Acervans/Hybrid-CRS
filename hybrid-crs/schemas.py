@@ -56,11 +56,22 @@ class AgentRequest(BaseModel):
     dataset_name: str
     user_id: str
 
-class StartWorkflowRequest(BaseModel):
+
+class ChatHistoryRequest(BaseModel):
+    chat_id: int
     user_id: str
-    agent_id: int
+
+
+class CreateChatHistoryRequest(ChatHistoryRequest):
+    content: str
+
+
+class AppendChatHistoryRequest(ChatHistoryRequest):
+    new_message: str
+
+
+class StartWorkflowRequest(AgentRequest):
     agent_name: str
-    dataset_name: str
 
 
 class SendUserResponseRequest(BaseModel):

@@ -53,8 +53,7 @@ def test_infer_column_roles():
         "column_names": ["user_id", "item_id", "rating"],
         "file_type": "interactions",
     }
-    response = client.post("/infer-column-roles",
-                           json=payload, headers=HEADERS)
+    response = client.post("/infer-column-roles", json=payload, headers=HEADERS)
     assert response.status_code == 200
     assert isinstance(response.json(), dict)
 
@@ -156,8 +155,7 @@ def test_chat_history_endpoints(mocker):
         "user_id": JWT_SUB,
         "content": json.dumps([{"role": "user", "content": "Hi"}]),
     }
-    res = client.post("/create-chat-history",
-                      json=payload_create, headers=HEADERS)
+    res = client.post("/create-chat-history", json=payload_create, headers=HEADERS)
     assert res.status_code == 200
     assert res.json()["chatId"] == 123
     mock_store.assert_called_once()
@@ -168,8 +166,7 @@ def test_chat_history_endpoints(mocker):
         "user_id": JWT_SUB,
         "new_message": json.dumps({"role": "assistant", "content": "Hello!"}),
     }
-    res = client.put("/append-chat-history",
-                     json=payload_append, headers=HEADERS)
+    res = client.put("/append-chat-history", json=payload_append, headers=HEADERS)
     assert res.status_code == 200
     mock_append.assert_called_once()
 
@@ -185,7 +182,11 @@ def test_chat_history_endpoints(mocker):
 
     # 4. Delete Chat History
     payload_delete = {"chat_id": 123, "user_id": JWT_SUB}
-    res = client.request(method="DELETE", url="/delete-chat-history",
-                         json=payload_delete, headers=HEADERS)
+    res = client.request(
+        method="DELETE",
+        url="/delete-chat-history",
+        json=payload_delete,
+        headers=HEADERS,
+    )
     assert res.status_code == 200
     mock_delete.assert_called_once_with(123)
