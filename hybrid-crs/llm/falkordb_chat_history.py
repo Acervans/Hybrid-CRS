@@ -41,7 +41,7 @@ class FalkorDBChatHistory:
             chat_id (int): Unique identifier for the chat
             messages (list[dict]): List of messages in the chat
         """
-        content_json = json.dumps(messages)
+        content_json = json.dumps(messages, indent=None, separators=(",", ":"))
         query = "CREATE (c:Chat {id: $chat_id, content: $content})"
         self.g.query(
             query, params={"chat_id": chat_id, "content": content_json}, timeout=TIMEOUT
@@ -89,7 +89,12 @@ class FalkorDBChatHistory:
 
         # Remove "]", append, restore "]"
         comma = "," if len(current_content) > 2 else ""
-        updated_content = current_content[:-1] + comma + json.dumps(new_message) + "]"
+        updated_content = (
+            current_content[:-1]
+            + comma
+            + json.dumps(new_message, indent=None, separators=(",", ":"))
+            + "]"
+        )
 
         update_query = """
         MATCH (c:Chat {id: $chat_id})
