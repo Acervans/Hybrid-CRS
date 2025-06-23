@@ -85,11 +85,11 @@ class FalkorDBChatHistory:
             print(f"Chat '{chat_id}' not found.")
             return
 
-        chat_node = result.result_set[0][0]
-        current_content = json.loads(chat_node.properties["content"])
+        current_content = result.result_set[0][0].properties.get("content", "[]")
 
-        current_content.append(new_message)
-        updated_json = json.dumps(current_content)
+        # Remove "]", append, restore "]"
+        comma = "," if len(current_content) > 2 else ""
+        updated_content = current_content[:-1] + comma + json.dumps(new_message) + "]"
 
         update_query = """
         MATCH (c:Chat {id: $chat_id})
@@ -97,7 +97,7 @@ class FalkorDBChatHistory:
         """
         self.g.query(
             update_query,
-            params={"chat_id": chat_id, "content": updated_json},
+            params={"chat_id": chat_id, "content": updated_content},
             timeout=TIMEOUT,
         )
 
