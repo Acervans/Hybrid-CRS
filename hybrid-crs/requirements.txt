@@ -6,7 +6,7 @@ fireducks==1.2.8
 fonttools==4.55.4
 html2text==2025.4.15
 httpx==0.28.1
-llama_index==0.12.43
+llama_index==0.12.44
 llama-index-llms-ollama==0.6.2
 nest_asyncio==1.6.0
 numpy==2.2.6
@@ -18,6 +18,6 @@ pymupdf==1.26.1
 recbole==1.2.0
 redis==5.2.1
 scipy==1.15.3
-supabase==2.15.3
+supabase==2.16.0
 torch==2.5.1
 tqdm==4.67.1
