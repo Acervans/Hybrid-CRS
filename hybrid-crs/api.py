@@ -86,7 +86,9 @@ dotenv.load_dotenv()
 html2text.config.IMAGES_TO_ALT = True
 html2text.config.BODY_WIDTH = 0
 
-OLLAMA_API_URL = "http://127.0.0.1:11434/api"
+HOSTNAME = os.getenv("LOCAL_SERVICES_HOST", "localhost")
+
+OLLAMA_API_URL = f"http://{HOSTNAME}:11434"
 OLLAMA_API_PROXY = "/ollama/api/{endpoint}"
 OLLAMA_API_EXAMPLES = {
     "generate": {
@@ -121,7 +123,11 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 EXPERT_MODEL = "EASE"
 HYPERPARAM_GRID = {"reg_weight": [1.0, 10.0, 100.0, 250.0, 500.0, 750.0, 1000.0]}
 
-Settings.llm = Ollama(model="qwen2.5:3b", request_timeout=REQUEST_TIMEOUT)
+Settings.llm = Ollama(
+    model="qwen2.5:3b",
+    base_url=OLLAMA_API_URL,
+    request_timeout=REQUEST_TIMEOUT,
+)
 
 # Setup logging functionality
 
@@ -275,7 +281,7 @@ app = FastAPI(
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Initialize FalkorDB client
-db = FalkorDB(host="localhost", port=6379)
+db = FalkorDB(host=HOSTNAME, port=6379)
 
 
 # Swagger API Docs Auth
@@ -301,12 +307,10 @@ app.openapi = auth_openapi
 # Store workflow instances in a dictionary
 workflows = {}
 
-# NOTE add frontend deployed url
 allowed_origins = [
-    "http://localhost:3000",  # Dev
-    "http://localhost:3001",  # Dev
-    "http://192.168.1.142:3000",
-    "https://hybrid-crs.vercel.app"
+    f"http://{HOSTNAME}:3000",  # Dev
+    f"http://{HOSTNAME}:3001",  # Dev
+    "https://hybrid-crs.vercel.app",
 ]
 
 app.add_middleware(
@@ -380,7 +384,7 @@ async def ollama_api_proxy(
         - StreamingResponse | Response: response to Ollama API call
     """
     # Reverse proxy for Ollama API
-    url: str = f"{OLLAMA_API_URL}/{endpoint}"
+    url: str = f"{OLLAMA_API_URL}/api/{endpoint}"
 
     # Perform Web Search with DuckDuckGo
     if request.headers.get("websearch") == "true":

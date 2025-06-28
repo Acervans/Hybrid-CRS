@@ -15,6 +15,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - LOCAL_SERVICES_HOST=localhost.gateway
+    extra_hosts:
+      - "localhost.gateway:host-gateway"
 
     volumes:
       - ./data_processing/datasets:/api/data_processing/datasets
