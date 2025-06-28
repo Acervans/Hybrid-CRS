@@ -11,7 +11,7 @@ WORKDIR /api
 FROM base AS deps
 
 # Add Backend code
-COPY api.py /api/api.py
+COPY api.py schemas.py /api/
 
 COPY data_processing/data_utils.py /api/data_processing/
 COPY \
