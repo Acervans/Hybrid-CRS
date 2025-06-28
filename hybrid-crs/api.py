@@ -311,6 +311,7 @@ allowed_origins = [
     f"http://{HOSTNAME}:3000",  # Dev
     f"http://{HOSTNAME}:3001",  # Dev
     "https://hybrid-crs.vercel.app",
+    "https://hybridcrs.share.zrok.io"
 ]
 
 app.add_middleware(

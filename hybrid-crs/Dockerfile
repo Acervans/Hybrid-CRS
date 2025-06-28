@@ -10,6 +10,13 @@ WORKDIR /api
 # --- Dependencies Stage ---
 FROM base AS deps
 
+# Python dependencies
+ADD requirements.txt /api/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- Deployment Stage ---
+FROM deps AS final
+
 # Add Backend code
 COPY api.py schemas.py /api/
 
@@ -25,13 +32,6 @@ COPY \
     recsys/falkordb_recommender.py \
     recsys/recbole_utils.py \
     /api/recsys/
-
-# Python dependencies
-ADD requirements.txt /api/
-RUN pip install --no-cache-dir -r requirements.txt
-
-# --- Deployment Stage ---
-FROM deps AS final
 
 # Expose port
 EXPOSE 8000
