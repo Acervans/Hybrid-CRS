@@ -3,7 +3,7 @@
 # STOP CONTAINER:    docker stop hybrid-crs-api
 # RESUME CONTAINER:  docker start hybrid-crs-api
 
-FROM python:3.12.10-slim-bookworm AS base
+FROM python:3.12.11-slim-bookworm AS base
 
 WORKDIR /api
 

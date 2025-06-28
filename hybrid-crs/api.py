@@ -306,6 +306,7 @@ allowed_origins = [
     "http://localhost:3000",  # Dev
     "http://localhost:3001",  # Dev
     "http://192.168.1.142:3000",
+    "https://hybrid-crs.vercel.app"
 ]
 
 app.add_middleware(
