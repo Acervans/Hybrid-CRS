@@ -192,8 +192,8 @@ def load_data_and_model(
         config["device"] = "cpu"
 
     init_seed(config["seed"], config["reproducibility"])
-    init_logger(config)
     if verbose:
+        init_logger(config)
         logger = getLogger()
         logger.info(config)
 
