@@ -944,6 +944,7 @@ async def start_workflow(
         user_id=payload.user_id,
         dataset_name=payload.dataset_name,
         dataset_dir=dataset_path,
+        description=payload.description,
         timeout=REQUEST_TIMEOUT,
         verbose=True,
     )

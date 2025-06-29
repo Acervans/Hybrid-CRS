@@ -72,6 +72,7 @@ class AppendChatHistoryRequest(ChatHistoryRequest):
 
 class StartWorkflowRequest(AgentRequest):
     agent_name: str
+    description: str
 
 
 class SendUserResponseRequest(BaseModel):
