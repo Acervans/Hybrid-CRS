@@ -259,6 +259,7 @@ def train_expert_model(
             },
             dataset_name=dataset_name,
             save_best_model_path=model_path,
+            tensorboard_log_dir="recsys"
         )
     except Exception as e:
         if delete_on_error:

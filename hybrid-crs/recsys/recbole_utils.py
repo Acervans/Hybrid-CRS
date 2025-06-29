@@ -367,7 +367,7 @@ def prepare_dataset(
     return config, dataset
 
 
-def get_tensorboard(logger, log_dir: str = "recsys"):
+def get_tensorboard(logger, log_dir: str = "."):
     """Adapted from recbole.utils.get_tensorboard to use sub-directory"""
     base_path = f"{log_dir}/log_tensorboard"
     dir_name = None
@@ -384,7 +384,7 @@ def get_tensorboard(logger, log_dir: str = "recsys"):
 
 
 def build_trainer(
-    model: str, config: Config, dataset: Dataset, tensorboard_log_dir: str = "recsys"
+    model: str, config: Config, dataset: Dataset, tensorboard_log_dir: str = "."
 ):
     """Builds and returns a RecBole Trainer using the given model name,
     configuration and dataset
@@ -424,6 +424,7 @@ def retrain_on_dataset(
     dataset_name: str | None = None,
     valid_set: AbstractDataLoader | None = None,
     save_best_model_path: str | None = None,
+    tensorboard_log_dir: str = ".",
 ) -> OrderedDict:
     """Retrains a RecBole model on the full dataset with given hyperparameters
 
@@ -435,6 +436,7 @@ def retrain_on_dataset(
         dataset_name (str | None): Optional dataset name. If None, inferred from config
         valid_set (AbstractDataLoader | None): Optional validation set used during retraining
         save_best_model_path (str | None): Path to save the retrained model. If None, the model is not saved.
+        tensorboard_log_dir (str): Directory to write tensorboard logfiles into
 
     Returns:
         OrderedDict: Evaluation scores from validation during retraining.
@@ -462,7 +464,12 @@ def retrain_on_dataset(
         dataset_name=dataset_name,
     )
 
-    trainer = build_trainer(model=model, config=config, dataset=full_data.dataset)
+    trainer = build_trainer(
+        model=model,
+        config=config,
+        dataset=full_data.dataset,
+        tensorboard_log_dir=tensorboard_log_dir,
+    )
 
     if saved:
         os.makedirs(os.path.dirname(save_best_model_path), exist_ok=True)
@@ -482,6 +489,7 @@ def hyperparam_grid_search(
     config_dict: dict = {},
     dataset_name: str | None = None,
     save_best_model_path: str | None = None,
+    tensorboard_log_dir: str = ".",
 ) -> tuple[dict, OrderedDict]:
     """
     Performs exhaustive grid search for RecBole models
@@ -493,6 +501,7 @@ def hyperparam_grid_search(
         config_dict (dict): Additional configuration parameters
         dataset_name (str | None): Dataset name in place of config dataset
         save_best_model_path (str | None): Path to save the best model (if any)
+        tensorboard_log_dir (str): Directory to write tensorboard logfiles into
 
     Returns:
         tuple[dict, OrderedDict]: Best hyperparameters and best test scores
@@ -522,6 +531,7 @@ def hyperparam_grid_search(
             model=model,
             config=tuning_config,
             dataset=train_data.dataset,
+            tensorboard_log_dir=tensorboard_log_dir,
         )
 
         # Don't save model during tuning
@@ -560,15 +570,14 @@ if __name__ == "__main__":
     best_params, test_scores = hyperparam_grid_search(
         model="EASE",
         config_file="config/generic.yaml",
-        config_dict={"save_dataset": True, "dataset_save_path": "ml-100k-Dataset.pth"},
+        config_dict={
+            "save_dataset": True,
+            "dataset_save_path": "ml-100k-Dataset.pth",
+        },
         param_grid={"reg_weight": [1.0, 10.0, 100.0, 250.0, 500.0, 1000.0]},
         dataset_name="ml-100k",
-        save_best_model_path="saved/ease-best.pth",
+        save_best_model_path="saved/ml-100k.pth",
     )
-    print("Best params:", best_params)
-    print("Test scores:", test_scores)
-
-    # hyperopt_tuning("EASE", ['config/generic.yaml'], 'ease.hyper', algo="exhaustive")
 
     # config, model, dataset, _train_set, _valid_set, _test_set = load_data_and_model(
     #     load_model='./saved/EASE-May-22-2025_04-34-38.pth',
