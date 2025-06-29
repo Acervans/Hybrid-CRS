@@ -308,8 +308,8 @@ app.openapi = auth_openapi
 workflows = {}
 
 allowed_origins = [
-    f"http://{HOSTNAME}:3000",  # Dev
-    f"http://{HOSTNAME}:3001",  # Dev
+    f"http://localhost:3000",  # Dev
+    f"http://localhost:3001",  # Dev
     "https://hybrid-crs.vercel.app",
 ]
 
