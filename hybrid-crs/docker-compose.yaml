@@ -9,7 +9,7 @@ services:
       context: .
       dockerfile: ./Dockerfile
     ports:
-      - 8000:8000
+      - 8000:80
     tty: true
     stdin_open: true
     restart: unless-stopped
