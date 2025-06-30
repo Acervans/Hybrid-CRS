@@ -336,7 +336,7 @@ async def verify_jwt(request: Request, call_next):
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing authorization token")
+        return JSONResponse("Missing authorization token", status_code=401)
 
     token = auth_header.split(" ")[1]
     try:
@@ -351,9 +351,9 @@ async def verify_jwt(request: Request, call_next):
         response = await call_next(request)
         return response
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
+        return JSONResponse("Token expired", status_code=401)
     except (jwt.InvalidSignatureError, jwt.InvalidTokenError, jwt.DecodeError) as e:
-        raise HTTPException(status_code=403, detail=f"Access denied: {e}")
+        return JSONResponse(f"Access denied: {e}", status_code=403)
 
 
 @app.get(OLLAMA_API_PROXY, openapi_extra={"requestBody": None})
