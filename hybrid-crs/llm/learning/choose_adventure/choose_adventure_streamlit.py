@@ -24,7 +24,7 @@ async def run_workflow():
         async for event in handler.stream_events():
             if isinstance(event, InputRequiredEvent):
                 blocks = (
-                    await st.session_state.handler.ctx.get("blocks", Blocks(blocks_=[]))
+                    await st.session_state.handler.ctx.store.get("blocks", Blocks(blocks_=[]))
                 ).blocks_
                 if len(blocks) > 0:
                     st.session_state.current_block = blocks[-1]
@@ -35,7 +35,7 @@ async def run_workflow():
                 st.session_state.story_finished = True
 
                 final_block = (
-                    await st.session_state.handler.ctx.get("blocks", Blocks(blocks_=[]))
+                    await st.session_state.handler.ctx.store.get("blocks", Blocks(blocks_=[]))
                 ).blocks_[-1]
                 final_block.segment.actions = []
                 st.session_state.current_block = final_block
@@ -122,7 +122,7 @@ async def main(llm):
             )
             st.session_state.blocks.append(initial_block)
             st.session_state.current_block = initial_block
-            await st.session_state.handler.ctx.set(
+            await st.session_state.handler.ctx.store.set(
                 "blocks", Blocks(blocks_=[initial_block])
             )
 

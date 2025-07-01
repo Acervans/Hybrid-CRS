@@ -1,0 +1,5 @@
+ipython==8.12.3
+llama_index==0.12.45
+ollama==0.5.1
+openai==1.93.0
+streamlit==1.46.1

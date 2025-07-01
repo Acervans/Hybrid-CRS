@@ -125,7 +125,7 @@ class ChooseYourOwnAdventureWorkflow(Workflow):
     async def create_segment(
         self, ctx: Context, ev: StartEvent | HumanChoiceEvent
     ) -> InputRequiredEvent | StopEvent:
-        blocks = await ctx.get("blocks", Blocks(blocks_=[]))
+        blocks = await ctx.store.get("blocks", Blocks(blocks_=[]))
         running_story = "\n".join(str(b) for b in blocks.blocks_)
 
         num_choices = len(list(filter(lambda x: x.choice is not None, blocks.blocks_)))
@@ -138,7 +138,7 @@ class ChooseYourOwnAdventureWorkflow(Workflow):
             )
             new_block = Block(segment=new_segment)
             blocks.blocks_.append(new_block)
-            await ctx.set("blocks", blocks)
+            await ctx.store.set("blocks", blocks)
 
             # New block is appended whenever input is required
             return InputRequiredEvent(prefix=str(new_segment))
@@ -150,7 +150,7 @@ class ChooseYourOwnAdventureWorkflow(Workflow):
             )
             final_block = Block(segment=final_segment)
             blocks.blocks_.append(final_block)
-            await ctx.set("blocks", blocks)
+            await ctx.store.set("blocks", blocks)
             return StopEvent(result=blocks.blocks_)
 
     @step
@@ -158,11 +158,11 @@ class ChooseYourOwnAdventureWorkflow(Workflow):
         self, ctx: Context, ev: HumanResponseEvent | HumanResponseInterruptEvent
     ) -> HumanChoiceEvent:
 
-        blocks = await ctx.get("blocks")
+        blocks = await ctx.store.get("blocks")
         block = blocks.blocks_[-1]
         block.choice = ev.response
         blocks.blocks_[-1] = block
-        await ctx.set("blocks", blocks)
+        await ctx.store.set("blocks", blocks)
 
         if not isinstance(ev, HumanResponseInterruptEvent):
             return HumanChoiceEvent(block_id=block.id_)
