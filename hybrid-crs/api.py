@@ -968,7 +968,7 @@ async def start_workflow(
             async for ev in wf.stream_events():
                 if not isinstance(ev, StreamEvent):
                     logger.info(f"Sending message to client: {ev}")
-                yield f"{json.dumps({'event': ev.__repr_name__(), 'message': ev.dict()})}\n\n"
+                yield f"{json.dumps({'event': ev.__repr_name__(), 'message': ev.model_dump()})}\n\n"
             final_result = await handler
 
             yield f"{json.dumps({'result': final_result})}\n\n"
