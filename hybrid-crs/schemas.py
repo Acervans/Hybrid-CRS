@@ -78,3 +78,11 @@ class StartWorkflowRequest(AgentRequest):
 class SendUserResponseRequest(BaseModel):
     workflow_id: str
     user_response: str
+
+
+class AddInteractionsRequest(BaseModel):
+    user_id: str
+    item_ids: List[str]
+    ratings: List[float]
+    agent_id: int
+    dataset_name: str

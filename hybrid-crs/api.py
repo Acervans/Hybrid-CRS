@@ -45,6 +45,7 @@ from duckduckgo_search.exceptions import DuckDuckGoSearchException
 from io import StringIO
 
 from schemas import (
+    AddInteractionsRequest,
     AgentConfig,
     ChatHistoryRequest,
     AppendChatHistoryRequest,
@@ -57,7 +58,7 @@ from schemas import (
     SendUserResponseRequest,
 )
 
-from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent
+from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent, update_dataset
 from llm.falkordb_chat_history import FalkorDBChatHistory
 from recsys.falkordb_recommender import FalkorDBRecommender
 from recsys.recbole_utils import (
@@ -259,7 +260,7 @@ def train_expert_model(
             },
             dataset_name=dataset_name,
             save_best_model_path=model_path,
-            tensorboard_log_dir="recsys"
+            tensorboard_log_dir="recsys",
         )
     except Exception as e:
         if delete_on_error:
@@ -937,50 +938,73 @@ async def start_workflow(
         - StreamingResponse: stream of workflow events
     """
     workflow_id = str(uuid.uuid4())
-    dataset_name = get_dataset_name(payload.dataset_name, payload.agent_id)
-    dataset_path = get_dataset_path(dataset_name, True)
-    wf = HybridCRSWorkflow(
-        wid=workflow_id,
-        agent_name=payload.agent_name,
-        user_id=payload.user_id,
-        dataset_name=payload.dataset_name,
-        dataset_dir=dataset_path,
-        description=payload.description,
-        timeout=REQUEST_TIMEOUT,
-        verbose=True,
-    )
+    agent_id = payload.agent_id
 
-    # Store the workflow instance
-    workflows[workflow_id] = {"wf": wf, "handler": None}
+    def archive_session():
+        # Set chat session as archived
+        (
+            supabase.table("ChatHistory")
+            .update({"archived": True})
+            .eq("agent_id", agent_id)
+            .execute()
+        )
 
-    async def event_generator():
-        logger.debug(f"event_generator: created workflow {workflow_id}")
-        yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
+    try:
+        # Increment session count
+        supabase.rpc("increment_new_sessions", {"agent_id": agent_id})
 
-        handler = wf.run()
+        dataset_name = get_dataset_name(payload.dataset_name, agent_id)
+        dataset_path = get_dataset_path(dataset_name, True)
+        wf = HybridCRSWorkflow(
+            wid=workflow_id,
+            agent_name=payload.agent_name,
+            user_id=payload.user_id,
+            dataset_name=payload.dataset_name,
+            dataset_dir=dataset_path,
+            description=payload.description,
+            timeout=REQUEST_TIMEOUT,
+            verbose=True,
+        )
 
-        # Store the workflow handler
-        workflows[workflow_id]["handler"] = handler
+        # Store the workflow instance
+        workflows[workflow_id] = {"wf": wf, "handler": None}
 
-        logger.debug(f"event_generator: obtained handler {id(handler)}")
-        try:
-            # Stream events and yield to client
-            async for ev in wf.stream_events():
-                if not isinstance(ev, StreamEvent):
-                    logger.info(f"Sending message to client: {ev}")
-                yield f"{json.dumps({'event': ev.__repr_name__(), 'message': ev.model_dump()})}\n\n"
-            final_result = await handler
+        async def event_generator():
+            logger.debug(f"event_generator: created workflow {workflow_id}")
+            handler = wf.run()
 
-            yield f"{json.dumps({'result': final_result})}\n\n"
-        except Exception as e:
-            error_message = f"Error in workflow: {str(e)}"
-            logger.error(error_message)
-            yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
-        finally:
-            # Clean up
-            workflows.pop(workflow_id, None)
+            # Store the workflow handler
+            workflows[workflow_id]["handler"] = handler
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+            logger.debug(f"event_generator: obtained handler {id(handler)}")
+            try:
+                # Stream events and yield to client
+                async for ev in wf.stream_events():
+                    is_stream_event = isinstance(ev, StreamEvent)
+                    if not is_stream_event:
+                        logger.info(f"Sending message to client: {ev}")
+                    yield f"{json.dumps({
+                        'event': ev.__repr_name__(),
+                        'message': ev.model_dump(),
+                        "done": not is_stream_event
+                        })}\n\n"
+                final_result = await handler
+
+                yield f"{json.dumps({'result': final_result})}\n\n"
+            except Exception as e:
+                error_message = f"Error in workflow: {str(e)}"
+                logger.error(error_message)
+                yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
+            finally:
+                # Clean up
+                workflows.pop(workflow_id, None)
+                archive_session()
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    except Exception as e:
+        archive_session()
+        raise HTTPException(status_code=500, detail=f"Error starting workflow: {e}")
 
 
 @app.post("/send-user-response")
@@ -1017,4 +1041,36 @@ async def send_user_response(
         raise HTTPException(
             status_code=404,
             detail=f"Workflow {workflow_id} not found or already completed",
+        )
+
+
+@app.post("/add-interactions")
+async def add_interactions(
+    payload: AddInteractionsRequest = Body(...),
+):
+    """Adds interactions to an agent's graph and processed dataset
+
+    Args:
+        payload (AddInteractionsRequest): User ID, interactions, agent ID and dataset name
+    """
+    try:
+        user_id = payload.user_id
+        item_ids = payload.item_ids
+        ratings = payload.ratings
+
+        agent_id = payload.agent_id
+        dataset_name = get_dataset_name(payload.dataset_name, agent_id)
+        dataset_path = get_dataset_path(dataset_name, True)
+
+        rec = FalkorDBRecommender(
+            dataset_name=dataset_name, dataset_dir=dataset_path, db=db, clear=False
+        )
+        rec.add_user_interactions(user_id, list(zip(item_ids, ratings)))
+
+        inter_path = f"{dataset_path}/{dataset_name}.inter"
+        await update_dataset(inter_path, user_id, item_ids, ratings)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error adding user interactions: {e}"
         )
