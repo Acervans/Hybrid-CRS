@@ -225,7 +225,7 @@ def get_dataset_path(dataset_name: str, processed: bool = False) -> str:
     Returns:
         - str: path of an agents' dataset files
     """
-    return f"./data_processing/datasets/{'processed' if processed else 'raw'}/{dataset_name}"
+    return f"./data_processing/datasets/{"processed" if processed else "raw"}/{dataset_name}"
 
 
 def train_expert_model(
@@ -743,7 +743,18 @@ async def delete_agent(request: Request, payload: AgentRequest = Body(...)):
         shutil.rmtree(raw_dataset_path, ignore_errors=True)
 
         # Delete graph
-        db.select_graph(dataset_name).delete()
+        try:
+            db.select_graph(dataset_name).delete()
+        except:
+            pass
+
+        # Delete chat histories
+        chats = (
+            supabase.table("ChatHistory").delete().eq("agent_id", agent_id).execute()
+        ).data
+        ch = FalkorDBChatHistory(db=db)
+        for chat in chats:
+            ch.delete_chat(chat["chat_id"])
 
         # Delete model and model dataset
         model_path = f"recsys/saved/{dataset_name}.pth"
@@ -977,6 +988,7 @@ async def start_workflow(
             workflows[workflow_id]["handler"] = handler
 
             logger.debug(f"event_generator: obtained handler {id(handler)}")
+            yield f"{json.dumps({"event": "workflowInit", "message": workflow_id, "done": True})}\n\n"
             try:
                 # Stream events and yield to client
                 async for ev in wf.stream_events():
@@ -984,17 +996,17 @@ async def start_workflow(
                     if not is_stream_event:
                         logger.info(f"Sending message to client: {ev}")
                     yield f"{json.dumps({
-                        'event': ev.__repr_name__(),
-                        'message': ev.model_dump(),
+                        "event": ev.__repr_name__(),
+                        "message": ev.model_dump(),
                         "done": not is_stream_event
                         })}\n\n"
                 final_result = await handler
 
-                yield f"{json.dumps({'result': final_result})}\n\n"
+                yield f"{json.dumps({"result": final_result})}\n\n"
             except Exception as e:
                 error_message = f"Error in workflow: {str(e)}"
                 logger.error(error_message)
-                yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
+                yield f"{json.dumps({"event": "error", "message": error_message, "done": True})}\n\n"
             finally:
                 # Clean up
                 workflows.pop(workflow_id, None)
