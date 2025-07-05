@@ -30,6 +30,8 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
+from contextlib import asynccontextmanager
+
 from falkordb import FalkorDB
 from redis.exceptions import ResponseError
 
@@ -124,8 +126,8 @@ Settings.llm = Ollama(
     request_timeout=REQUEST_TIMEOUT,
 )
 
-# Default SSL context for HTTPX clients
-ssl_context = httpx.create_ssl_context(verify=True, cert=None, trust_env=True)
+# Client for HTTPX requests
+httpx_client: httpx.AsyncClient
 
 # Setup logging functionality
 
@@ -144,14 +146,13 @@ if not logger.hasHandlers():
 
 
 async def scrape_search_result(
-    result: dict, rank: int, client: httpx.AsyncClient, timeout=WEB_SEARCH_TIMEOUT
+    result: dict, rank: int, timeout=WEB_SEARCH_TIMEOUT
 ) -> dict | None:
     """Scrapes the website content of a search `result`
 
     - Args:
         - result (dict): Dictionary with search result data
         - rank (int): Rank of the search result
-        - client (httpx.AsyncClient): HTTP client
         - timeout (float): Request timeout
 
     - Returns:
@@ -159,7 +160,7 @@ async def scrape_search_result(
         - None: if exception occurs
     """
     try:
-        response = await client.get(result["href"], timeout=timeout)
+        response = await httpx_client.get(result["href"], timeout=timeout)
     except (httpx.TimeoutException, httpx.RemoteProtocolError):
         return None
     return {
@@ -185,16 +186,15 @@ async def web_search(
     ddgs = DDGS(timeout=timeout)
     try:
         results = ddgs.text(query, max_results=max_results, safesearch="moderate")
-        async with httpx.AsyncClient(verify=ssl_context) as client:
-            tasks = [
-                scrape_search_result(result, rank, client, timeout)
-                for rank, result in enumerate(results, 1)
-            ]
-            final_results = sorted(
-                filter(None, await asyncio.gather(*tasks)), key=lambda x: x["rank"]
-            )
+        tasks = [
+            scrape_search_result(result, rank, timeout)
+            for rank, result in enumerate(results, 1)
+        ]
+        final_results = sorted(
+            filter(None, await asyncio.gather(*tasks)), key=lambda x: x["rank"]
+        )
 
-            return final_results
+        return final_results
     except DuckDuckGoSearchException:
         return ["Failed to search the web"]
 
@@ -271,9 +271,20 @@ def train_expert_model(
 
 ### API DEFINITION ###
 
+
+# Initialize client for all HTTPX requests
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global httpx_client
+    httpx_client = httpx.AsyncClient()
+    yield
+    await httpx_client.aclose()
+
+
 app = FastAPI(
     title="HybridCRS API",
     summary="Application Programming Interface for the HybridCRS Platform",
+    lifespan=lifespan,
 )
 
 # Initialize Supabase client
@@ -395,45 +406,43 @@ async def ollama_api_proxy(
     body_bytes = json.dumps(body).encode("utf-8") if body else None
 
     async def streaming_response():
-        async with httpx.AsyncClient(verify=ssl_context) as client:
-            async with client.stream(
-                method=request.method,
-                url=url,
-                data=body_bytes,
-                params=request.query_params,
-                timeout=REQUEST_TIMEOUT,
-            ) as stream_response:
-                if stream_response.status_code != 200:
-                    response_text = await stream_response.aread()
-                    raise HTTPException(
-                        status_code=stream_response.status_code,
-                        detail=response_text.decode(),
-                    )
-                async for chunk in stream_response.aiter_bytes():
-                    yield chunk
+        async with httpx_client.stream(
+            method=request.method,
+            url=url,
+            data=body_bytes,
+            params=request.query_params,
+            timeout=REQUEST_TIMEOUT,
+        ) as stream_response:
+            if stream_response.status_code != 200:
+                response_text = await stream_response.aread()
+                raise HTTPException(
+                    status_code=stream_response.status_code,
+                    detail=response_text.decode(),
+                )
+            async for chunk in stream_response.aiter_bytes():
+                yield chunk
 
     if len(body) > 0 and body.get("stream", True):
         # Streaming reponse
         return StreamingResponse(streaming_response())
     else:
         # Non-streaming response
-        async with httpx.AsyncClient(verify=ssl_context) as client:
-            try:
-                proxy = await client.request(
-                    method=request.method,
-                    url=url,
-                    data=body_bytes,
-                    params=request.query_params,
-                    timeout=REQUEST_TIMEOUT,
-                )
-                response.body = proxy.content
-                response.status_code = proxy.status_code
-                return response
-            except httpx.ReadTimeout:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Request took too long to generate a response",
-                )
+        try:
+            proxy = await httpx_client.request(
+                method=request.method,
+                url=url,
+                data=body_bytes,
+                params=request.query_params,
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.body = proxy.content
+            response.status_code = proxy.status_code
+            return response
+        except httpx.ReadTimeout:
+            raise HTTPException(
+                status_code=500,
+                detail="Request took too long to generate a response",
+            )
 
 
 @app.post("/pdf-to-text")
