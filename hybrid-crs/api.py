@@ -45,7 +45,6 @@ from duckduckgo_search.exceptions import DuckDuckGoSearchException
 from io import StringIO
 
 from schemas import (
-    AddInteractionsRequest,
     AgentConfig,
     ChatHistoryRequest,
     AppendChatHistoryRequest,
@@ -62,10 +61,7 @@ from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent, update_datas
 from llm.falkordb_chat_history import FalkorDBChatHistory
 from recsys.falkordb_recommender import FalkorDBRecommender
 from recsys.recbole_utils import (
-    hyperparam_grid_search,
-    run_recbole,
-    parse_model,
-    load_data_and_model,
+    hyperparam_grid_search
 )
 from data_processing.data_utils import (
     InterHeaders,
@@ -1053,36 +1049,4 @@ async def send_user_response(
         raise HTTPException(
             status_code=404,
             detail=f"Workflow {workflow_id} not found or already completed",
-        )
-
-
-@app.post("/add-interactions")
-async def add_interactions(
-    payload: AddInteractionsRequest = Body(...),
-):
-    """Adds interactions to an agent's graph and processed dataset
-
-    Args:
-        payload (AddInteractionsRequest): User ID, interactions, agent ID and dataset name
-    """
-    try:
-        user_id = payload.user_id
-        item_ids = payload.item_ids
-        ratings = payload.ratings
-
-        agent_id = payload.agent_id
-        dataset_name = get_dataset_name(payload.dataset_name, agent_id)
-        dataset_path = get_dataset_path(dataset_name, True)
-
-        rec = FalkorDBRecommender(
-            dataset_name=dataset_name, dataset_dir=dataset_path, db=db, clear=False
-        )
-        rec.add_user_interactions(user_id, list(zip(item_ids, ratings)))
-
-        inter_path = f"{dataset_path}/{dataset_name}.inter"
-        await update_dataset(inter_path, user_id, item_ids, ratings)
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error adding user interactions: {e}"
         )
