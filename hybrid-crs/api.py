@@ -60,9 +60,7 @@ from schemas import (
 from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent, update_dataset
 from llm.falkordb_chat_history import FalkorDBChatHistory
 from recsys.falkordb_recommender import FalkorDBRecommender
-from recsys.recbole_utils import (
-    hyperparam_grid_search
-)
+from recsys.recbole_utils import hyperparam_grid_search
 from data_processing.data_utils import (
     InterHeaders,
     UserHeaders,
@@ -126,6 +124,9 @@ Settings.llm = Ollama(
     request_timeout=REQUEST_TIMEOUT,
 )
 
+# Default SSL context for HTTPX clients
+ssl_context = httpx.create_ssl_context(verify=True, cert=None, trust_env=True)
+
 # Setup logging functionality
 
 logger = logging.getLogger(__name__)
@@ -184,7 +185,7 @@ async def web_search(
     ddgs = DDGS(timeout=timeout)
     try:
         results = ddgs.text(query, max_results=max_results, safesearch="moderate")
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=ssl_context) as client:
             tasks = [
                 scrape_search_result(result, rank, client, timeout)
                 for rank, result in enumerate(results, 1)
@@ -394,7 +395,7 @@ async def ollama_api_proxy(
     body_bytes = json.dumps(body).encode("utf-8") if body else None
 
     async def streaming_response():
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=ssl_context) as client:
             async with client.stream(
                 method=request.method,
                 url=url,
@@ -416,7 +417,7 @@ async def ollama_api_proxy(
         return StreamingResponse(streaming_response())
     else:
         # Non-streaming response
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=ssl_context) as client:
             try:
                 proxy = await client.request(
                     method=request.method,
