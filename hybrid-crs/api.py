@@ -273,20 +273,18 @@ def train_expert_model(
 httpx_client: httpx.AsyncClient
 
 # Supabase client
-supabase: Client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # FalkorDB client
-db: FalkorDB
+db: FalkorDB = FalkorDB(host=HOSTNAME, port=6379)
 
 
-# Initialize HTTPX connection pool and database connections
+# Initialize HTTPX connection pool
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global httpx_client, supabase, db
+    global httpx_client
 
     httpx_client = httpx.AsyncClient()
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    db = FalkorDB(host=HOSTNAME, port=6379)
     yield
 
     await httpx_client.aclose()
