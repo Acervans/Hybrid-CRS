@@ -126,9 +126,6 @@ Settings.llm = Ollama(
     request_timeout=REQUEST_TIMEOUT,
 )
 
-# Client for HTTPX requests
-httpx_client: httpx.AsyncClient
-
 # Setup logging functionality
 
 logger = logging.getLogger(__name__)
@@ -272,12 +269,26 @@ def train_expert_model(
 ### API DEFINITION ###
 
 
-# Initialize client for all HTTPX requests
+# HTTPX client
+httpx_client: httpx.AsyncClient
+
+# Supabase client
+supabase: Client
+
+# FalkorDB client
+db: FalkorDB
+
+
+# Initialize HTTPX connection pool and database connections
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global httpx_client
+    global httpx_client, supabase, db
+
     httpx_client = httpx.AsyncClient()
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    db = FalkorDB(host=HOSTNAME, port=6379)
     yield
+
     await httpx_client.aclose()
 
 
@@ -286,12 +297,6 @@ app = FastAPI(
     summary="Application Programming Interface for the HybridCRS Platform",
     lifespan=lifespan,
 )
-
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# Initialize FalkorDB client
-db = FalkorDB(host=HOSTNAME, port=6379)
 
 
 # Swagger API Docs Auth
