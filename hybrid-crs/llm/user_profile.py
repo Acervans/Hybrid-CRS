@@ -34,28 +34,7 @@ class UserProfile(BaseModel):
     """
 
     user_id: int | str
-
-    """
-    {   'category': {
-            'type': DICT,
-            'data': {
-                'action': True,
-                'horror': False
-            }
-        },
-        'min_popularity': {
-            'type': NUM,
-            'data': 8
-        },
-        'max_popularity': {
-            'type': NUM,
-            'data': 9
-        }
-    }
-    """
     context_prefs: dict[str, ContextPreference]
-
-    # { 331: 5, 221: 0 }  # FalkorDB id, rating. ratings are numerical, ask the user for ratings
     item_prefs: dict[int, float]
 
     def __init__(

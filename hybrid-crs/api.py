@@ -61,8 +61,8 @@ from schemas import (
 
 from llm.hybrid_crs_workflow import (
     HybridCRSWorkflow,
-    StreamEvent,
     InputRequiredEvent,
+    StreamEvent,
 )
 from llm.falkordb_chat_history import FalkorDBChatHistory
 from recsys.falkordb_recommender import FalkorDBRecommender
@@ -1009,11 +1009,18 @@ async def start_workflow(
                     data = ev.model_dump()
                     if not is_stream_event:
                         logger.info(f"Sending message to client: {ev}")
-                    yield f"{json.dumps({
+
+                    event = {
                         "event": ev.__repr_name__(),
-                        "message": data["_data"] if isinstance(ev, InputRequiredEvent) else data,
-                        "done": not is_stream_event
-                        })}\n\n"
+                        "message": (
+                            data["_data"]
+                            if isinstance(ev, InputRequiredEvent)
+                            else data
+                        ),
+                        "done": not is_stream_event,
+                    }
+                    yield f"{json.dumps(event)}\n\n"
+
                 final_result = await handler
 
                 yield f"{json.dumps({"event": "WorkflowEnd", "message": final_result, "done": True})}\n\n"
