@@ -979,14 +979,13 @@ async def start_workflow(
 
         dataset_name = get_dataset_name(payload.dataset_name, agent_id)
         dataset_path = get_dataset_path(dataset_name, True)
-        model_path = f"./recsys/saved/{dataset_name}.pth"
         wf = HybridCRSWorkflow(
             user_id=payload.user_id,
             agent_name=payload.agent_name,
             dataset_name=payload.dataset_name,
             dataset_dir=dataset_path,
             description=payload.description,
-            model_path=model_path,
+            model_dir="./recsys/saved",
             timeout=REQUEST_TIMEOUT,
             verbose=True,
         )
