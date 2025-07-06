@@ -59,7 +59,11 @@ from schemas import (
     SendUserResponseRequest,
 )
 
-from llm.hybrid_crs_workflow import HybridCRSWorkflow, StreamEvent, update_dataset
+from llm.hybrid_crs_workflow import (
+    HybridCRSWorkflow,
+    StreamEvent,
+    InputRequiredEvent,
+)
 from llm.falkordb_chat_history import FalkorDBChatHistory
 from recsys.falkordb_recommender import FalkorDBRecommender
 from recsys.recbole_utils import hyperparam_grid_search
@@ -997,25 +1001,26 @@ async def start_workflow(
             workflows[workflow_id]["handler"] = handler
 
             logger.debug(f"event_generator: obtained handler {id(handler)}")
-            yield f"{json.dumps({"event": "workflowInit", "message": workflow_id, "done": True})}\n\n"
+            yield f"{json.dumps({"event": "WorkflowInit", "message": workflow_id, "done": True})}\n\n"
             try:
                 # Stream events and yield to client
                 async for ev in wf.stream_events():
                     is_stream_event = isinstance(ev, StreamEvent)
+                    data = ev.model_dump()
                     if not is_stream_event:
                         logger.info(f"Sending message to client: {ev}")
                     yield f"{json.dumps({
                         "event": ev.__repr_name__(),
-                        "message": ev.model_dump(),
+                        "message": data["_data"] if isinstance(ev, InputRequiredEvent) else data,
                         "done": not is_stream_event
                         })}\n\n"
                 final_result = await handler
 
-                yield f"{json.dumps({"result": final_result})}\n\n"
+                yield f"{json.dumps({"event": "WorkflowEnd", "message": final_result, "done": True})}\n\n"
             except Exception as e:
                 error_message = f"Error in workflow: {str(e)}"
                 logger.error(error_message)
-                yield f"{json.dumps({"event": "error", "message": error_message, "done": True})}\n\n"
+                yield f"{json.dumps({"event": "Error", "message": error_message, "done": True})}\n\n"
             finally:
                 # Clean up
                 workflows.pop(workflow_id, None)
