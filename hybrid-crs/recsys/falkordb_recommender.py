@@ -28,6 +28,7 @@ class FalkorDBRecommender:
         port: int = 6379,
         username: Optional[str] = None,
         password: Optional[str] = None,
+        ensure_string_ids: bool = True,
         clear: bool = True,
     ):
         """
@@ -39,13 +40,16 @@ class FalkorDBRecommender:
             graph_name (Optional[str]): Name of the graph. Uses `dataset_name` by default.
             db (Optional[FalkorDB]): Optional existing FalkorDB connection
             host,port,username,password: FalkorDB connection params
+            ensure_string_ids (bool): Whether to ensure IDs are ingested as strings
             clear (bool): Whether to clear existing data from FalkorDB
         """
         self.dataset_name = dataset_name
         self.graph_name = dataset_name if not graph_name else graph_name
 
         # Connect to FalkorDB and select graph
-        self.db = db or FalkorDB(host=host, port=port, username=username, password=password)
+        self.db = db or FalkorDB(
+            host=host, port=port, username=username, password=password
+        )
         self.g = self.db.select_graph(self.graph_name)
 
         try:
@@ -76,21 +80,31 @@ class FalkorDBRecommender:
         # Ingest nodes & edges from CSV if empty
         if empty:
             self.inter_df = pd.read_csv(
-                f"{dataset_dir}/{dataset_name}.inter", sep=sep
+                f"{dataset_dir}/{dataset_name}.inter",
+                sep=sep,
+                dtype=(
+                    {"user_id:token": str, "item_id:token": str}
+                    if ensure_string_ids
+                    else None
+                ),
             )
             try:
                 self.users_df = pd.read_csv(
-                    f"{dataset_dir}/{dataset_name}.user", sep=sep
+                    f"{dataset_dir}/{dataset_name}.user",
+                    sep=sep,
+                    dtype={"user_id:token": str} if ensure_string_ids else None,
                 )
-            except FileNotFoundError:
+            except (FileNotFoundError, TypeError):
                 self.users_df = pd.DataFrame(
                     {"user_id:token": self.inter_df["user_id:token"].unique()}
                 )
             try:
                 self.items_df = pd.read_csv(
-                    f"{dataset_dir}/{dataset_name}.item", sep=sep
+                    f"{dataset_dir}/{dataset_name}.item",
+                    sep=sep,
+                    dtype={"item_id:token": str} if ensure_string_ids else None,
                 )
-            except FileNotFoundError:
+            except (FileNotFoundError, TypeError):
                 self.items_df = pd.DataFrame(
                     {"item_id:token": self.inter_df["item_id:token"].unique()}
                 )
@@ -703,13 +717,13 @@ class FalkorDBRecommender:
 if __name__ == "__main__":
     dataset = "ml-10m"
     datasets_folder = f"../data_processing/datasets/processed/{dataset}"
-    frec = FalkorDBRecommender(dataset, datasets_folder, clear=False)
+    frec = FalkorDBRecommender(dataset, datasets_folder, clear=True)
 
     res = frec.get_unique_feat_values("Item", "category")
     print(res)
 
     res = frec.recommend_contextual(
-        user_id=1,
+        user_id="1",
         item_props={"category": ["Animation", "Action"]},
         top_n=10,
         context_weight=0.5,
@@ -720,7 +734,7 @@ if __name__ == "__main__":
         print(node, score)
 
     res = frec.recommend_cf(
-        user_id=1,
+        user_id="1",
         top_n=10,
         k=10,
     )
@@ -728,7 +742,7 @@ if __name__ == "__main__":
         print(node, score)
 
     res = frec.recommend_hybrid(
-        user_id=1,
+        user_id="1",
         item_props={"category": "Animation"},
         top_n=10,
         k=10,
@@ -742,7 +756,7 @@ if __name__ == "__main__":
         del ctx_props["item_id"], ctx_props["pagerank"], ctx_props["name"]
 
         exps = frec.explain_blackbox_recs(
-            user_id=1,
+            user_id="1",
             item_id=props["item_id"],
             shared_props=ctx_props.keys(),
             min_rating=3.0,
