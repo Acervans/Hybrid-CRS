@@ -317,7 +317,10 @@ def get_recommendations(
     Returns:
         list[tuple]: Recommendations (score, item_id)
     """
-    uid_series = torch.Tensor(dataset.token2id(dataset.uid_field, [user_id]))
+    try:
+        uid_series = torch.Tensor(dataset.token2id(dataset.uid_field, [user_id]))
+    except ValueError:
+        return []
 
     model.eval()
     uid_inter = {dataset.uid_field: uid_series}
