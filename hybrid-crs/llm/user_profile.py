@@ -52,7 +52,7 @@ class UserProfile(BaseModel):
 
         Args:
             context (str): The context name.
-            definition (dict): The context definition, including type and initial data.
+            definition (ContextPreference): The context definition, including type and initial data.
 
         Raises:
             ValueError: If the context already exists in the preferences.
