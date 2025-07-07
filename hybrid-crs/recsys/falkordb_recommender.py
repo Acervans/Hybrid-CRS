@@ -451,10 +451,10 @@ class FalkorDBRecommender:
         )
         score_arr = score_arr @ weights
 
-        # Map to item_id
-        scores = [(res[i][0], score_arr[i]) for i in range(len(res))]
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return scores[:top_n]
+        # Map scores to item
+        recs = [(res[i][0], score_arr[i]) for i in range(len(res))]
+        recs.sort(key=lambda x: x[1], reverse=True)
+        return recs[:top_n]
 
     def recommend_cf(
         self, user_id: Any, min_rating: float = 3.0, k: int = 10, top_n: int = 10
