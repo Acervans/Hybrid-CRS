@@ -586,7 +586,7 @@ class FalkorDBRecommender:
         item_id: Any,
         shared_props: Optional[List[str]] = None,
         min_rating: float = 3.0,
-        rating_threshold: float = 3.0,
+        rating_threshold: float = 2.5,
         top_feat_exp: int = 5,
         top_collab_exp: int = 5,
     ) -> List[str]:
