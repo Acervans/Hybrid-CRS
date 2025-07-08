@@ -706,6 +706,7 @@ class FalkorDBRecommender:
                 explanations.append(
                     f"This item has an average rating of {round(avg_rating, 2)}/5.0 based on {total} user ratings."
                 )
+                explanations.append(round(avg_rating, 2))
 
         return (
             explanations
