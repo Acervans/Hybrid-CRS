@@ -476,8 +476,8 @@ class HybridCRSWorkflow(Workflow):
 
     async def explain_recommendation(
         self, profile: UserProfile, item: Any
-    ) -> tuple[CompletionResponse, float | None]:
-        """Generates an explanation for a recommendation along with the average rating."""
+    ) -> CompletionResponse:
+        """Generates natural language explanations for a recommendation."""
         explanations = self.falkordb_rec.explain_blackbox_recs(
             user_id=self.user_id,
             item_id=item.properties["item_id"],
