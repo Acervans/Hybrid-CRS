@@ -412,18 +412,25 @@ class HybridCRSWorkflow(Workflow):
 
         # If new user, recommend with contextual preferences
         # Otherwise use hybrid recommendation (contextual + CF)
+        use_expert = self.expert_model_loaded and not is_new_user
+        if use_expert:
+            falkor_top_n = TOP_N // 2
+            expert_top_n = TOP_N - falkor_top_n
+        else:
+            falkor_top_n = TOP_N
+
         falkor_recs = (
             self.falkordb_rec.recommend_contextual(
-                user_id=self.user_id, item_props=item_props, top_n=TOP_N
+                user_id=self.user_id, item_props=item_props, top_n=falkor_top_n
             )
             if is_new_user
             else self.falkordb_rec.recommend_hybrid(
-                user_id=self.user_id, item_props=item_props, top_n=TOP_N, k=10
+                user_id=self.user_id, item_props=item_props, top_n=falkor_top_n, k=10
             )
         )
         final_recs = {item.properties["item_id"]: item for item, _score in falkor_recs}
 
-        if self.expert_model_loaded and not is_new_user:
+        if use_expert:
             if self._verbose:
                 print(
                     "Strategy: Hybrid recommendations using FalkorDB (Contextual + CF) + RecBole expert model."
@@ -432,7 +439,7 @@ class HybridCRSWorkflow(Workflow):
                 user_id=str(self.user_id),
                 model=self.recbole_model,
                 dataset=self.recbole_dataset,
-                cutoff=TOP_N,
+                cutoff=expert_top_n,
             )
             for _, item_id in expert_recs:
                 if item_id not in final_recs:
