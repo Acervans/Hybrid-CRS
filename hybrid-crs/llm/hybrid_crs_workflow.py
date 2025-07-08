@@ -676,19 +676,25 @@ class HybridCRSWorkflow(Workflow):
         item_ids = list(ev.feedback.keys())
         ratings = list(ev.feedback.values())
 
-        profile: UserProfile = await ctx.store.get("profile")
-        profile.add_item_preferences(item_ids, ratings)
-        self.falkordb_rec.add_user_interactions(
-            self.user_id, list(zip(item_ids, ratings))
-        )
-        await update_dataset(self.inter_path, self.user_id, item_ids, ratings)
+        if item_ids:
+            profile: UserProfile = await ctx.store.get("profile")
+            profile.add_item_preferences(item_ids, ratings)
+            self.falkordb_rec.add_user_interactions(
+                self.user_id, list(zip(item_ids, ratings))
+            )
+            await update_dataset(self.inter_path, self.user_id, item_ids, ratings)
 
         memory: ChatMemoryBuffer = await ctx.store.get("memory")
-        confirmation_message = f"Thank you! I've recorded your feedback for {len(item_ids)} items. Would you like to continue?"
         memory.put(
-            ChatMessage(role=MessageRole.ASSISTANT, content=confirmation_message)
+            ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=f"Feedback received for {len(item_ids)} items. Thank the user and continue the session.",
+            )
         )
-        ctx.write_event_to_stream(StreamEvent(delta=confirmation_message))
+        chat_stream = await llm.astream_chat(memory.get())
+        async for response in chat_stream:
+            ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
+        memory.put(ChatMessage(role=MessageRole.ASSISTANT, content=response.message))
 
         is_new_user = (
             len(self.falkordb_rec.get_items_by_user(self.user_id)) < MIN_ITEMS_CF
