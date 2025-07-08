@@ -472,12 +472,7 @@ class HybridCRSWorkflow(Workflow):
         """Generates natural language explanations for a list of recommended items."""
         tasks = [self.explain_recommendation(profile, item) for item in items]
         responses = await asyncio.gather(*tasks)
-        completions, ratings = list(zip(*responses))
-
-        for i in range(len(items)):
-            items[i].properties["falkordb_rating"] = ratings[i]
-
-        return [c.text for c in completions]
+        return [r.text for r in responses]
 
     async def explain_recommendation(
         self, profile: UserProfile, item: Any
@@ -492,20 +487,19 @@ class HybridCRSWorkflow(Workflow):
             rating = float(explanations[-1])
         except (IndexError, ValueError):
             rating = None
-        return (
-            llm.acomplete(
-                explanation_prompt.format(
-                    preferences=profile.context_prefs,
-                    item_name=item.properties.get("name", item.properties["item_id"]),
-                    item_properties={
-                        k: v
-                        for k, v in item.properties.items()
-                        if k not in ("item_id", "name", "pagerank")
-                    },
-                    explanations="\n".join(f"- {e}" for e in explanations),
-                )
-            ),
-            rating,
+        item.properties["falkordb_rating"] = rating
+
+        return llm.acomplete(
+            explanation_prompt.format(
+                preferences=profile.context_prefs,
+                item_name=item.properties.get("name", item.properties["item_id"]),
+                item_properties={
+                    k: v
+                    for k, v in item.properties.items()
+                    if k not in ("item_id", "name", "pagerank")
+                },
+                explanations="\n".join(f"- {e}" for e in explanations),
+            )
         )
 
     # --- Workflow Steps ---
