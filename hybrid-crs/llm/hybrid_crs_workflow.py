@@ -15,7 +15,7 @@ from llama_index.core.workflow import (
     step,
     Context,
 )
-from llama_index.core.llms import ChatMessage, MessageRole
+from llama_index.core.llms import ChatMessage, MessageRole, CompletionResponse
 from llama_index.core.llms.function_calling import FunctionCallingLLM
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.tools import FunctionTool, ToolOutput
@@ -470,7 +470,29 @@ class HybridCRSWorkflow(Workflow):
         self, profile: UserProfile, items: list
     ) -> list[str]:
         """Generates natural language explanations for a list of recommended items."""
-        tasks = [
+        tasks = [self.explain_recommendation(profile, item) for item in items]
+        responses = await asyncio.gather(*tasks)
+        completions, ratings = list(zip(*responses))
+
+        for i in range(len(items)):
+            items[i].properties["falkordb_rating"] = ratings[i]
+
+        return [c.text for c in completions]
+
+    async def explain_recommendation(
+        self, profile: UserProfile, item: Any
+    ) -> tuple[CompletionResponse, float | None]:
+        """Generates an explanation for a recommendation along with the average rating."""
+        explanations = self.falkordb_rec.explain_blackbox_recs(
+            user_id=self.user_id,
+            item_id=item.properties["item_id"],
+            shared_props=self.falkordb_rec.item_feats.keys(),
+        )
+        try:
+            rating = float(explanations[-1])
+        except (IndexError, ValueError):
+            rating = None
+        return (
             llm.acomplete(
                 explanation_prompt.format(
                     preferences=profile.context_prefs,
@@ -480,20 +502,11 @@ class HybridCRSWorkflow(Workflow):
                         for k, v in item.properties.items()
                         if k not in ("item_id", "name", "pagerank")
                     },
-                    explanations="\n".join(
-                        f"- {e}"
-                        for e in self.falkordb_rec.explain_blackbox_recs(
-                            user_id=self.user_id,
-                            item_id=item.properties["item_id"],
-                            shared_props=self.falkordb_rec.item_feats.keys(),
-                        )
-                    ),
+                    explanations="\n".join(f"- {e}" for e in explanations),
                 )
-            )
-            for item in items
-        ]
-        responses = await asyncio.gather(*tasks)
-        return [r.text for r in responses]
+            ),
+            rating,
+        )
 
     # --- Workflow Steps ---
     @step
