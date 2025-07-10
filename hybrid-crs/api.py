@@ -41,8 +41,8 @@ from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.core.workflow import HumanResponseEvent
 
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import DuckDuckGoSearchException
+from ddgs import DDGS
+from ddgs.exceptions import DDGSException
 
 from io import StringIO
 
@@ -196,7 +196,7 @@ async def web_search(
         )
 
         return final_results
-    except DuckDuckGoSearchException:
+    except DDGSException:
         return ["Failed to search the web"]
 
 

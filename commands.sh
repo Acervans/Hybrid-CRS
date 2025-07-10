@@ -28,7 +28,7 @@ wg-quick down ./tunnel.conf
 pip install --upgrade ollama llama-index llama-cloud llama-cloud-services llama-index-cli llama-index-embeddings-ollama \
     llama-index-embeddings-fastembed llama-index-embeddings-huggingface llama-index-graph-stores-falkordb \
     llama-index-indices-managed-llama-cloud llama-index-llms-ollama llama-parse streamlit fireducks fastapi html2text \
-    pymupdf falkordb supabase AutoClean duckduckgo_search
+    pymupdf falkordb supabase AutoClean py_AutoClean ddgs
 
 
 ### Gather only imported python requirements for API (NOTE: delete duplicates and streamlit)
