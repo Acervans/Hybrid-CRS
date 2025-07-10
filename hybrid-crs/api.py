@@ -986,6 +986,7 @@ async def start_workflow(
             dataset_dir=dataset_path,
             description=payload.description,
             model_dir="./recsys/saved",
+            db=db,
             timeout=REQUEST_TIMEOUT,
             verbose=True,
         )

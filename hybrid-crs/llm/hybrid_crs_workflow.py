@@ -25,6 +25,7 @@ from llama_index.llms.ollama import Ollama
 
 from pydantic import BaseModel, field_validator
 from typing import Annotated, Any, Dict, List, Optional, Union
+from falkordb import FalkorDB
 
 
 # --- Module Setup ---
@@ -179,6 +180,7 @@ class HybridCRSWorkflow(Workflow):
         dataset_dir: str,
         description: Optional[str] = None,
         model_dir: Optional[str] = None,
+        db: Optional[FalkorDB] = None,
         **kwargs,
     ):
         """Initialize a Hybrid Conversational Recommendation Workflow.
@@ -194,6 +196,7 @@ class HybridCRSWorkflow(Workflow):
             description (Optional[str]): A brief description of what the dataset is about
             model_dir (Optional[str]): Directory path to the saved RecBole model and dataset.
                 If not provided, defaults to `../recsys/saved`.
+            db (Optional[FalkorDB]): Optional existing FalkorDB connection
             **kwargs: Additional keyword arguments passed to the parent `Workflow` class
         """
         self.user_id = user_id
@@ -212,7 +215,11 @@ class HybridCRSWorkflow(Workflow):
         if self._verbose:
             print("Connecting to FalkorDB...")
         self.falkordb_rec = FalkorDBRecommender(
-            dataset_name=self.dataset_name, dataset_dir=dataset_dir, clear=False
+            dataset_name=self.dataset_name,
+            dataset_dir=dataset_dir,
+            db=db,
+            host=HOSTNAME,
+            clear=False,
         )
 
         recbole_model_dir = model_dir or os.path.join("..", "recsys", "saved")
