@@ -445,6 +445,7 @@ class HybridCRSWorkflow(Workflow):
             expert_recs = get_recommendations(
                 user_id=str(self.user_id),
                 model=self.recbole_model,
+                device='cpu',
                 dataset=self.recbole_dataset,
                 cutoff=expert_top_n,
             )
@@ -641,7 +642,7 @@ class HybridCRSWorkflow(Workflow):
 
             memory.put(
                 ChatMessage(
-                    role=MessageRole.ASSISTANT,
+                    role=MessageRole.SYSTEM,
                     content=response.message,
                     additional_kwargs=response.message.additional_kwargs,
                 )
@@ -700,8 +701,8 @@ class HybridCRSWorkflow(Workflow):
             ChatMessage(
                 role=MessageRole.SYSTEM,
                 content=(
-                    f"Feedback received for {len(item_ids)} items. "
-                    "Thank the user and continue gathering preferences, or offer recommendations after the feedback."
+                    f"Feedback received for {len(item_ids)} items which you ALREADY recommended to the user. "
+                    "Thank the user and continue gathering preferences."
                 ),
             )
         )
