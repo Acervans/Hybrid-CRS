@@ -37,4 +37,4 @@ COPY \
 EXPOSE 8000
 
 # Initialize servers
-CMD ["fastapi", "run", "api.py", "--port", "80", "--workers", "4"]
+CMD ["fastapi", "run", "api.py", "--port", "80"]
