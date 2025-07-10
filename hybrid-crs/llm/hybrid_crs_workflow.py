@@ -445,7 +445,7 @@ class HybridCRSWorkflow(Workflow):
             expert_recs = get_recommendations(
                 user_id=str(self.user_id),
                 model=self.recbole_model,
-                device='cpu',
+                device="cpu",
                 dataset=self.recbole_dataset,
                 cutoff=expert_top_n,
             )
