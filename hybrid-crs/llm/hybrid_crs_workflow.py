@@ -489,7 +489,7 @@ class HybridCRSWorkflow(Workflow):
             rating = None
         item.properties["falkordb_rating"] = rating
 
-        return llm.acomplete(
+        return await llm.acomplete(
             explanation_prompt.format(
                 preferences=profile.context_prefs,
                 item_name=item.properties.get("name", item.properties["item_id"]),
@@ -576,6 +576,7 @@ class HybridCRSWorkflow(Workflow):
         JsonFeedbackEvent, RecommendationGeneratedEvent, InputRequiredEvent, StopEvent
     ]:
         """Processes user input, streaming responses and handling tool calls."""
+        # Receive feedback from JSON object
         try:
             feedback_data = json.loads(ev.response)
             if isinstance(feedback_data, dict):
@@ -593,6 +594,7 @@ class HybridCRSWorkflow(Workflow):
 
         memory.put(ChatMessage(role=MessageRole.USER, content=ev.response))
 
+        # Obtain tool calls from conversation
         tool_stream = await llm.astream_chat_with_tools(
             tools=self.tools,
             chat_history=memory.get(),
@@ -608,7 +610,7 @@ class HybridCRSWorkflow(Workflow):
         if response is not None:
             tool_calls = response.message.additional_kwargs.get("tool_calls", None)
             if self._verbose:
-                print(f"Tool calls: \n{"\n".join(tool_calls)}")
+                print(f"Tool calls: \n{"\n".join(str(t) for t in tool_calls)}")
 
         if not tool_calls:
             return InputRequiredEvent(from_event=ev.__repr_name__())
@@ -638,13 +640,14 @@ class HybridCRSWorkflow(Workflow):
                 )
             )
 
+        # Provide recommendations
         if recs_exps := await ctx.store.get("last_recommendations", None):
             await ctx.store.set("last_recommendations", None)
-            # TODO if event is RecommendationGeneratedEvent, show feedback UI
             return RecommendationGeneratedEvent(
                 recommendations=recs_exps[0], explanations=recs_exps[1]
             )
 
+        # End chat session
         if await ctx.store.get("end_session", False):
             memory.put(
                 ChatMessage(
@@ -661,6 +664,7 @@ class HybridCRSWorkflow(Workflow):
             profile: UserProfile = await ctx.store.get("profile")
             return StopEvent(result=profile.model_dump())
 
+        # Assistant's response
         chat_stream = await llm.astream_chat(memory.get())
         async for response in chat_stream:
             ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
@@ -688,7 +692,10 @@ class HybridCRSWorkflow(Workflow):
         memory.put(
             ChatMessage(
                 role=MessageRole.SYSTEM,
-                content=f"Feedback received for {len(item_ids)} items. Thank the user and continue the session.",
+                content=(
+                    f"Feedback received for {len(item_ids)} items. "
+                    "Thank the user and continue gathering preferences, or offer recommendations after the feedback."
+                ),
             )
         )
         chat_stream = await llm.astream_chat(memory.get())
