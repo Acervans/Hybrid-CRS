@@ -213,6 +213,7 @@ def process_listlike_columns(df: pd.DataFrame) -> pd.DataFrame:
 def clean_dataframe(
     dataset: pd.DataFrame,
     except_columns: Iterable[str] = (USER_ID, ITEM_ID),
+    dropna: bool = True,
     logfile: bool = False,
     verbose: bool = True,
 ) -> pd.DataFrame:
@@ -223,6 +224,7 @@ def clean_dataframe(
     Args:
         dataset (pd.DataFrame): DataFrame to clean
         except_columns (Iterable[str]): Column names to exclude from cleaning
+        dropna (bool): Whether to drop rows with NaN values
         logfile (bool): Whether to generate a log file of the cleaning operations
         verbose (bool): Whether to print verbose output during cleaning
 
@@ -247,7 +249,8 @@ def clean_dataframe(
         verbose=verbose,
     )
     dataset.loc[:, clean_cols] = pipeline.output.loc[:, clean_cols]
-    dataset = dataset.dropna(ignore_index=True)
+    if dropna:
+        dataset = dataset.dropna(ignore_index=True)
 
     return pd.from_pandas(dataset)
 

@@ -810,11 +810,11 @@ async def retrain_agent(request: Request, payload: AgentRequest = Body(...)):
         # Clean dataset files
         inter_dataset = f"{dataset_path}/{dataset_name}.inter"
         user_dataset = f"{dataset_path}/{dataset_name}.user"
-        clean_dataframe(pd.read_csv(inter_dataset, sep=SEP), verbose=False).to_csv(
+        clean_dataframe(pd.read_csv(inter_dataset, sep=SEP), verbose=False, dropna=False).to_csv(
             inter_dataset, sep=SEP, index=False, quoting=QUOTE_MINIMAL, escapechar="\\"
         )
         if os.path.exists(user_dataset):
-            clean_dataframe(pd.read_csv(user_dataset, sep=SEP), verbose=False).to_csv(
+            clean_dataframe(pd.read_csv(user_dataset, sep=SEP), verbose=False, dropna=False).to_csv(
                 user_dataset,
                 sep=SEP,
                 index=False,
