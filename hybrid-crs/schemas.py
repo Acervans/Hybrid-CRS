@@ -1,5 +1,4 @@
-""" Request schemas for api.py endpoints.
-"""
+"""Request schemas for api.py endpoints."""
 
 from fastapi import UploadFile
 from pydantic import BaseModel

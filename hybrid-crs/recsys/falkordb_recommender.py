@@ -1,5 +1,4 @@
-""" Recommendation using FalkorDB for a tabular dataset. Assumes data already preprocessed with `data_processing`
-"""
+"""Recommendation using FalkorDB for a tabular dataset. Assumes data already preprocessed with `data_processing`"""
 
 import fireducks.pandas as pd
 import numpy as np

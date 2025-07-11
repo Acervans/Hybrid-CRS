@@ -1,5 +1,5 @@
-""" API for HybridCRS. FastAPI backend for HybridCRS that powers LLM-based chat (Ollama),
-    web search, PDF parsing, agent workflows, and column inference for recommender systems.
+"""API for HybridCRS. FastAPI backend for HybridCRS that powers LLM-based chat (Ollama),
+web search, PDF parsing, agent workflows, and column inference for recommender systems.
 """
 
 import os
@@ -325,8 +325,8 @@ app.openapi = auth_openapi
 workflows = {}
 
 allowed_origins = [
-    f"http://localhost:3000",  # Dev
-    f"http://localhost:3001",  # Dev
+    "http://localhost:3000",  # Dev
+    "http://localhost:3001",  # Dev
     "https://hybrid-crs.vercel.app",
 ]
 

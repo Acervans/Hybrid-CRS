@@ -1,5 +1,5 @@
-""" Utility functions for training, evaluating, and tuning RecBole recommendation models.
-    Supports model loading, full-sort prediction, and grid search hyperparameter optimization.
+"""Utility functions for training, evaluating, and tuning RecBole recommendation models.
+Supports model loading, full-sort prediction, and grid search hyperparameter optimization.
 """
 
 import os

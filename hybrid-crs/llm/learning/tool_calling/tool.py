@@ -1,5 +1,6 @@
 from typing import Callable
 
+
 class Tool:
     definition: dict
     function: Callable

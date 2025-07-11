@@ -1,5 +1,4 @@
-""" Chat history storage using FalkorDB as graph database 
-"""
+"""Chat history storage using FalkorDB as graph database"""
 
 import json
 from falkordb import FalkorDB

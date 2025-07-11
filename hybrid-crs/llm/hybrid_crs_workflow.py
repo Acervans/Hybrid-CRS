@@ -125,7 +125,7 @@ If the user says "<<FEEDBACK_RECEIVED_N>>", it means the user ALREADY RECEIVED N
 
 explanation_prompt = PromptTemplate(
     """
-You are an expert recommender. The user provided these contextual preferences so far: 
+You are an expert recommender. The user provided these contextual preferences so far:
 {preferences}
 
 You recommended the item '{item_name}' with properties:

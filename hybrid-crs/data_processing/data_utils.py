@@ -1,5 +1,5 @@
-""" Data processing utilities for recommendation datasets.
-    Header standardization, data cleaning, normalization and type inference.
+"""Data processing utilities for recommendation datasets.
+Header standardization, data cleaning, normalization and type inference.
 """
 
 import os
@@ -16,7 +16,7 @@ from typing import List, Literal, Iterable, Optional
 MODEL = "qwen2.5:3b"
 
 DATATYPE_TEMPLATE = """
-From this column of sample data, determine the datatype. Your options are: 
+From this column of sample data, determine the datatype. Your options are:
 'token': SINGLE discrete value (ID, genre...)
 'token_seq': SEQUENCE of discrete values (description, name, list of genres...)
 'float': SINGLE numerical value (price, timestamp...)

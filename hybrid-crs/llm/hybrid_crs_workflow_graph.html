@@ -1,12 +1,12 @@
 <html>
     <head>
         <meta charset="utf-8">
-        
+
             <script src="lib/bindings/utils.js"></script>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
             <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-            
-        
+
+
 <center>
 <h1></h1>
 </center>
@@ -40,24 +40,24 @@
                  float: left;
              }
 
-             
 
-             
 
-             
+
+
+
         </style>
     </head>
 
 
     <body>
         <div class="card" style="width: 100%">
-            
-            
+
+
             <div id="mynetwork" class="card-body"></div>
         </div>
 
-        
-        
+
+
 
         <script type="text/javascript">
 
@@ -77,15 +77,15 @@
                   value : []
               };
 
-              
 
-              
+
+
 
               // This method is responsible for drawing the graph, returns the drawn network
               function drawGraph() {
                   var container = document.getElementById('mynetwork');
 
-                  
+
 
                   // parsing and collecting nodes and edges from the python
                   nodes = new vis.DataSet([{"color": "#ADD8E6", "id": "_done", "label": "_done", "shape": "box", "title": null}, {"color": "#FFA07A", "id": "StopEvent", "label": "StopEvent", "shape": "ellipse", "title": null}, {"color": "#ADD8E6", "id": "post_recommendation", "label": "post_recommendation", "shape": "box", "title": null}, {"color": "#90EE90", "id": "RecommendationGeneratedEvent", "label": "RecommendationGeneratedEvent", "shape": "ellipse", "title": null}, {"color": "#90EE90", "id": "InputRequiredEvent", "label": "InputRequiredEvent", "shape": "ellipse", "title": null}, {"color": "#BEDAE4", "id": "external_step", "label": "external_step", "shape": "box", "title": null}, {"color": "#ADD8E6", "id": "process_json_feedback", "label": "process_json_feedback", "shape": "box", "title": null}, {"color": "#90EE90", "id": "JsonFeedbackEvent", "label": "JsonFeedbackEvent", "shape": "ellipse", "title": null}, {"color": "#ADD8E6", "id": "process_user_input", "label": "process_user_input", "shape": "box", "title": null}, {"color": "#90EE90", "id": "HumanResponseEvent", "label": "HumanResponseEvent", "shape": "ellipse", "title": null}, {"color": "#ADD8E6", "id": "start", "label": "start", "shape": "box", "title": null}, {"color": "#E27AFF", "id": "StartEvent", "label": "StartEvent", "shape": "ellipse", "title": null}]);
@@ -130,21 +130,21 @@
     }
 };
 
-                  
 
 
-                  
+
+
 
                   network = new vis.Network(container, data, options);
 
-                  
-
-                  
-
-                  
 
 
-                  
+
+
+
+
+
+
 
                   return network;
 

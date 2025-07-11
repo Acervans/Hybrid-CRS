@@ -3,7 +3,7 @@ cd hybrid-crs
 # First stop the service
 docker compose down ollama
 
-# Reload nvidia_uvm 
+# Reload nvidia_uvm
 sudo rmmod nvidia_uvm && sudo modprobe nvidia_uvm
 
 # Then restart the service
