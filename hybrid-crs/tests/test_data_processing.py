@@ -1,9 +1,13 @@
-from data_utils import (
+from data_processing.data_utils import (
     get_item_headers,
     get_user_headers,
     get_inter_headers,
     get_datatype,
 )
+
+#################
+# data_utils.py #
+#################
 
 
 def test_get_item_headers():
