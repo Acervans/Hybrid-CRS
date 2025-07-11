@@ -1006,11 +1006,7 @@ async def start_workflow(
             try:
                 # Stream events and yield to client
                 async for ev in wf.stream_events():
-                    is_stream_event = isinstance(ev, StreamEvent)
                     data = ev.model_dump()
-                    if not is_stream_event:
-                        logger.info(f"Sending message to client: {ev}")
-
                     event = {
                         "event": ev.__repr_name__(),
                         "message": (
@@ -1018,7 +1014,7 @@ async def start_workflow(
                             if isinstance(ev, InputRequiredEvent)
                             else data
                         ),
-                        "done": not is_stream_event,
+                        "done": not isinstance(ev, StreamEvent),
                     }
                     yield f"{json.dumps(event)}\n\n"
 
