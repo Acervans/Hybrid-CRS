@@ -1059,7 +1059,7 @@ async def send_user_response(
     # Get the workflow instance
     wf_dict = workflows.get(workflow_id, {})
     wf = wf_dict.get("wf", None)
-    logger.info(f"send_user_response: user response {user_response}")
+    logger.info(f"send_user_response: {user_response}")
     if wf:
         # Get workflow handler to send event
         handler = wf_dict.get("handler", None)
