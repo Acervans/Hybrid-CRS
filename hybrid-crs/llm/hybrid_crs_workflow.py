@@ -587,26 +587,24 @@ class HybridCRSWorkflow(Workflow):
         """Processes user input, streaming responses and handling tool calls."""
         memory: ChatMemoryBuffer = await ctx.store.get("memory")
 
-        # Receive feedback from JSON object
-        try:
-            feedback_data = json.loads(ev.response)
-            if isinstance(feedback_data, dict):
-                await ctx.store.set("last_recommendations_for_llm_context", None)
-                memory.put(
-                    ChatMessage(
-                        role=MessageRole.USER,
-                        content=f"<<FEEDBACK_RECEIVED_{len(feedback_data)}>>",
-                    )
-                )
-                return JsonFeedbackEvent(feedback=feedback_data)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            pass
-
+        # Process feedback
         if last_recs_ctx := await ctx.store.get(
             "last_recommendations_for_llm_context", None
         ):
-            memory.put(ChatMessage(role=MessageRole.SYSTEM, content=last_recs_ctx))
             await ctx.store.set("last_recommendations_for_llm_context", None)
+            # Receive feedback from JSON object
+            try:
+                feedback_data = json.loads(ev.response)
+                if isinstance(feedback_data, dict):
+                    memory.put(
+                        ChatMessage(
+                            role=MessageRole.USER,
+                            content=f"<<FEEDBACK_RECEIVED_{len(feedback_data)}>>",
+                        )
+                    )
+                    return JsonFeedbackEvent(feedback=feedback_data)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                memory.put(ChatMessage(role=MessageRole.SYSTEM, content=last_recs_ctx))
 
         memory.put(ChatMessage(role=MessageRole.USER, content=ev.response))
 
@@ -659,16 +657,9 @@ class HybridCRSWorkflow(Workflow):
         # Provide recommendations
         if recs_exps := await ctx.store.get("last_recommendations", None):
             await ctx.store.set("last_recommendations", None)
-            memory.put(
-                ChatMessage(
-                    role=MessageRole.SYSTEM,
-                    content=(
-                        f"The system is about to show {len(recs_exps[0])} items to the user. "
-                        "ONLY say something like 'Here are your recommendations:', INCLUDING THE COLON."
-                    ),
-                )
+            chat_stream = await llm.astream_complete(
+                "Say something like 'Here are your recommendations:'\n Include the colon."
             )
-            chat_stream = await llm.astream_chat(memory.get())
             async for response in chat_stream:
                 ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
             memory.put(
