@@ -109,7 +109,7 @@ The dataset is about: {description}.
 
 You have a set of tools to achieve this. You MUST use them as described:
 1.  **Gather Preferences**: Ask the user about their tastes for item features. Use the `update_user_preferences` tool to save each preference they state. Do NOT use this tool for item feedback.
-2.  **Get Recommendations**: Once you have some preferences, and ONLY if the user wants, call the `get_recommendations` tool to fetch a list of items.
+2.  **Get Recommendations**: Once you have some preferences, and ONLY if the user wants, call the `get_recommendations` tool to fetch some recommendations. They will be displayed all at once.
 3.  **Process Feedback**: After presenting items, if the user gives natural language feedback like "I liked the first one", you MUST process this by calling the `add_user_item_feedback` tool.
     -   Infer a rating: 5.0 for positive feedback (like, love, enjoy), and 1.0 for negative feedback (dislike, hate, not for me).
     -   Collect ALL feedback from the user's message into a single call.
