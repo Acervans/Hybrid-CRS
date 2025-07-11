@@ -663,7 +663,7 @@ class HybridCRSWorkflow(Workflow):
             async for response in chat_stream:
                 ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
             memory.put(
-                ChatMessage(role=MessageRole.ASSISTANT, content=response.message)
+                ChatMessage(role=MessageRole.ASSISTANT, content=response.text)
             )
 
             return RecommendationGeneratedEvent(
