@@ -11,7 +11,7 @@ from csv import Sniffer, QUOTE_MINIMAL
 from AutoClean import AutoClean
 from ollama import chat
 from pydantic import BaseModel
-from typing import List, Literal, Iterable
+from typing import List, Literal, Iterable, Optional
 
 MODEL = "qwen2.5:3b"
 
@@ -43,13 +43,13 @@ class UserHeaders(BaseModel):
 class ItemHeaders(BaseModel):
     item_id_column: str
     name_column: str
-    category_column: str | None
+    category_column: Optional[str] = None
 
 
 class InterHeaders(BaseModel):
     user_id_column: str
     item_id_column: str
-    rating_column: str | None
+    rating_column: Optional[str] = None
 
 
 class DataType(BaseModel):
@@ -200,7 +200,7 @@ def process_listlike_columns(df: pd.DataFrame) -> pd.DataFrame:
                 df[col] = df[col].apply(
                     lambda x: (
                         " ".join(
-                            x.replace(" ", "-")
+                            x.strip().replace(" ", "-")
                             for x in re.split(r",\s*", re.sub(r"[\"']", "", x[1:-1]))
                         )
                         if x
@@ -239,7 +239,7 @@ def clean_dataframe(
         mode="manual",
         duplicates="auto",
         missing_num=False,
-        missing_categ=False,
+        missing_categ="most_frequent",
         encode_categ=False,
         extract_datetime="auto",
         outliers=False,

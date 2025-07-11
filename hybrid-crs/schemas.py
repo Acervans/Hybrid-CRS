@@ -27,7 +27,7 @@ class Column(BaseModel):
 class SniffResult(BaseModel):
     delimiter: str
     has_header: bool
-    labels: List[str]
+    labels: List[str] | None
     newline_str: str
     quote_char: Optional[str]
     total_rows: int
