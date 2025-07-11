@@ -17,6 +17,7 @@ services:
       - .env
     environment:
       - LOCAL_SERVICES_HOST=localhost.gateway
+      - OLLAMA_HOST=localhost.gateway
     extra_hosts:
       - "localhost.gateway:host-gateway"
 
