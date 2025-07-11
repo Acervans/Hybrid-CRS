@@ -132,7 +132,7 @@ You recommended the item '{item_name}' with properties:
 {item_properties}
 
 Rephrase the following structured explanations for this recommendation into a single, fluent, non-technical paragraph.
-Do not use bullet points, be as concise as possible, and strictly reference the preferences and properties provided.
+Do not use bullet points, be as concise as possible, and don't make up any explanation.
 
 Explanations:
 {explanations}
