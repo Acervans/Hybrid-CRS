@@ -119,7 +119,7 @@ Here are the item features you can ask about, along with their possible values. 
 {schema}
 
 Start the conversation by introducing yourself and asking what the user is looking for.
-If the user says "<<FEEDBACK_RECEIVED_N>>", it means you ALREADY SHOWED N RECOMMENDATIONS and RECEIVED FEEDBACK, so just continue gathering preferences.
+If the user says "<<FEEDBACK_RECEIVED_N>>", it means the user ALREADY RECEIVED N RECOMMENDATIONS and ALREADY SENT FEEDBACK, so just continue gathering preferences.
 """
 )
 
