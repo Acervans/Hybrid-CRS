@@ -651,6 +651,22 @@ class HybridCRSWorkflow(Workflow):
         # Provide recommendations
         if recs_exps := await ctx.store.get("last_recommendations", None):
             await ctx.store.set("last_recommendations", None)
+            memory.put(
+                ChatMessage(
+                    role=MessageRole.SYSTEM,
+                    content=(
+                        f"You're about to recommend {len(recs_exps[0])} items to the user. "
+                        "Say something like 'Here are your recommendations:'. INCLUDE THE COLON."
+                    ),
+                )
+            )
+            chat_stream = await llm.astream_chat(memory.get())
+            async for response in chat_stream:
+                ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
+            memory.put(
+                ChatMessage(role=MessageRole.ASSISTANT, content=response.message)
+            )
+
             return RecommendationGeneratedEvent(
                 recommendations=recs_exps[0], explanations=recs_exps[1]
             )
@@ -702,7 +718,7 @@ class HybridCRSWorkflow(Workflow):
                 role=MessageRole.SYSTEM,
                 content=(
                     f"Feedback received for {len(item_ids)} items which you ALREADY recommended to the user. "
-                    "Thank the user and continue gathering preferences."
+                    "Continue gathering preferences. Do NOT give more recommendations."
                 ),
             )
         )
