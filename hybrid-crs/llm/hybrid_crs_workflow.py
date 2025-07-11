@@ -535,7 +535,7 @@ class HybridCRSWorkflow(Workflow):
                         "type": feat_type,
                         "values": (
                             sorted(possible_values)
-                            if len(possible_values) <= 50
+                            if len(possible_values) <= 200
                             else f"Too many to list ({len(possible_values)})."
                         ),
                     }
