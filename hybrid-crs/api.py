@@ -660,7 +660,10 @@ async def create_agent(
                 # Normalize `*_seq` columns
                 for idx, orig_delim in seq_col_delim.items():
                     col = headers[idx]
-                    if orig_delim != " ":
+                    if (
+                        orig_delim != " "
+                        and not df[col].str.match(r"^[\[\(].*[\)\]]$").any()
+                    ):
                         df[col] = (
                             df[col]
                             .str.replace(" ", "-", regex=False)

@@ -247,6 +247,7 @@ def clean_dataframe(
         verbose=verbose,
     )
     dataset.loc[:, clean_cols] = pipeline.output.loc[:, clean_cols]
+    dataset = dataset.dropna(ignore_index=True)
 
     return pd.from_pandas(dataset)
 
