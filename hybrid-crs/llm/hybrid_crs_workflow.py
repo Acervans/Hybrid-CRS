@@ -119,6 +119,7 @@ Here are the item features you can ask about, along with their possible values. 
 {schema}
 
 Start the conversation by introducing yourself and asking what the user is looking for.
+If the user says <<FEEDBACK_RECEIVED>>, it means you ALREADY SHOWED RECOMMENDATIONS and RECEIVED FEEDBACK, so just continue chatting.
 """
 )
 
@@ -131,7 +132,7 @@ You recommended the item '{item_name}' with properties:
 {item_properties}
 
 Rephrase the following structured explanations for this recommendation into a single, fluent, non-technical paragraph.
-Do not use bullet points, be concise, and strictly reference the preferences and properties provided.
+Do not use bullet points, be as concise as possible, and strictly reference the preferences and properties provided.
 
 Explanations:
 {explanations}
@@ -584,16 +585,21 @@ class HybridCRSWorkflow(Workflow):
         JsonFeedbackEvent, RecommendationGeneratedEvent, InputRequiredEvent, StopEvent
     ]:
         """Processes user input, streaming responses and handling tool calls."""
+        memory: ChatMemoryBuffer = await ctx.store.get("memory")
+
         # Receive feedback from JSON object
         try:
             feedback_data = json.loads(ev.response)
             if isinstance(feedback_data, dict):
                 await ctx.store.set("last_recommendations_for_llm_context", None)
+                memory.put(ChatMessage(
+                    role=MessageRole.USER,
+                    content=f"<<FEEDBACK_RECEIVED>> (for {len(feedback_data)} items)"
+                ))
                 return JsonFeedbackEvent(feedback=feedback_data)
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
-        memory: ChatMemoryBuffer = await ctx.store.get("memory")
         if last_recs_ctx := await ctx.store.get(
             "last_recommendations_for_llm_context", None
         ):
@@ -713,15 +719,6 @@ class HybridCRSWorkflow(Workflow):
             await update_dataset(self.inter_path, self.user_id, item_ids, ratings)
 
         memory: ChatMemoryBuffer = await ctx.store.get("memory")
-        memory.put(
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=(
-                    f"Feedback received for {len(item_ids)} items which you ALREADY recommended to the user. "
-                    "Continue gathering preferences. Do NOT give more recommendations."
-                ),
-            )
-        )
         chat_stream = await llm.astream_chat(memory.get())
         async for response in chat_stream:
             ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
