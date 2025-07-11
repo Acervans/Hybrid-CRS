@@ -1021,6 +1021,7 @@ async def start_workflow(
                 final_result = await handler
 
                 yield f"{json.dumps({"event": "WorkflowEnd", "message": final_result, "done": True})}\n\n"
+                logger.debug(f"event_generator: final preferences {final_result}")
             except Exception as e:
                 error_message = f"Error in workflow: {str(e)}"
                 logger.error(error_message)
