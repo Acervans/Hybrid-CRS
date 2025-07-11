@@ -592,10 +592,12 @@ class HybridCRSWorkflow(Workflow):
             feedback_data = json.loads(ev.response)
             if isinstance(feedback_data, dict):
                 await ctx.store.set("last_recommendations_for_llm_context", None)
-                memory.put(ChatMessage(
-                    role=MessageRole.USER,
-                    content=f"<<FEEDBACK_RECEIVED>> (for {len(feedback_data)} items)"
-                ))
+                memory.put(
+                    ChatMessage(
+                        role=MessageRole.USER,
+                        content=f"<<FEEDBACK_RECEIVED>> (for {len(feedback_data)} items)",
+                    )
+                )
                 return JsonFeedbackEvent(feedback=feedback_data)
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
