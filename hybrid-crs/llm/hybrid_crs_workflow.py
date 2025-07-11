@@ -119,7 +119,7 @@ Here are the item features you can ask about, along with their possible values. 
 {schema}
 
 Start the conversation by introducing yourself and asking what the user is looking for.
-If the user says <<FEEDBACK_RECEIVED>>, it means you ALREADY SHOWED RECOMMENDATIONS and RECEIVED FEEDBACK, so just continue chatting.
+If the user says "<<FEEDBACK_RECEIVED_5>>", it means you ALREADY SHOWED 5 RECOMMENDATIONS and RECEIVED FEEDBACK, so just continue chatting.
 """
 )
 
@@ -595,7 +595,7 @@ class HybridCRSWorkflow(Workflow):
                 memory.put(
                     ChatMessage(
                         role=MessageRole.USER,
-                        content=f"<<FEEDBACK_RECEIVED>> (for {len(feedback_data)} items)",
+                        content=f"<<FEEDBACK_RECEIVED_{len(feedback_data)}>>",
                     )
                 )
                 return JsonFeedbackEvent(feedback=feedback_data)
@@ -663,8 +663,8 @@ class HybridCRSWorkflow(Workflow):
                 ChatMessage(
                     role=MessageRole.SYSTEM,
                     content=(
-                        f"You're about to recommend {len(recs_exps[0])} items to the user. "
-                        "Say something like 'Here are your recommendations:'. INCLUDE THE COLON."
+                        f"The system is about to show {len(recs_exps[0])} items to the user. "
+                        "ONLY say something like 'Here are your recommendations:', INCLUDING THE COLON."
                     ),
                 )
             )
