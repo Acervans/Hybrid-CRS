@@ -1,5 +1,5 @@
 # Hybrid-CRS
-Master's Thesis project, a platform to create Hybrid Conversational Recommender System Agents by leveraging LLMs. Uses Knowledge Graphs to obtain recommendations, and tool-calling capabilities to communicate with external functions to carry out the conversations. The platform includes functionalities for chatting with LLMs freely, with voice chat and web search capabilities.
+Master's Thesis project, a platform to create Hybrid Conversational Recommender System Agents by leveraging LLMs. Uses Knowledge Graphs and RecBole models to obtain recommendations, as well as tool-calling capabilities to communicate with external functions and carry out the conversations. The platform includes functionalities for chatting with LLMs freely, with voice chat and web search capabilities.
 
 Deployed at https://hybrid-crs.vercel.app, with local backend proxy using [zrok](https://zrok.io/).
 
