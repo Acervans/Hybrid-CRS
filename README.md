@@ -7,7 +7,7 @@ Master's Thesis project, a platform to create Hybrid Conversational Recommender 
 
 ## Setup
 1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/).
-2. Create a Supabase project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
+2. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
 3. In `frontend/hybrid-crs-ui/`, create a __.env.local__ file using __.env.local.example__ as sample. Replace with Supabase anonymous key and URL.
 4. In `hybrid-crs/`:
    - Create a __.env__ file using __.env.example__ as sample. Replace with Supabase JWT secret, service role key and URL.
