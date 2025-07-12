@@ -540,7 +540,7 @@ class HybridCRSWorkflow(Workflow):
                         ),
                     }
                 else:
-                    item_schema_data[feat] = {"type": feat_type, "values": "N/A"}
+                    item_schema_data[feat] = {"type": feat_type, "values": "Any"}
             self.schema_with_values["Item Features"] = item_schema_data
 
         memory = ChatMemoryBuffer.from_defaults(
