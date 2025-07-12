@@ -13,6 +13,7 @@ Master's Thesis project, a platform to create Hybrid Conversational Recommender 
    - In `frontend/hybrid-crs-ui/`, create a __.env.local__ file using __.env.local.example__ as sample. Replace with Supabase anonymous key and URL.
    - Run `docker compose up` to pull and build all the images for the project, and start the Ollama, FalkorDB, API and UI services.
 4. All set! The frontend can be accessed at http://localhost:3001.
+   - Once signed up and authenticated, use the LLM Selector (top right), and pull the `qwen2.5:3b` model, required for the project.
 
 ### Developer Setup
 1. Go to `hybrid-crs/` and install Python dependencies in __requirements-dev.txt__. Using __pip__:
