@@ -36,7 +36,7 @@ fastapi run api.py
 ```
 4. To manually start the frontend server (UI service in Docker Compose):
    - Go to `hybrid-crs/frontend/hybrid-crs-ui/`.
-   - Install packages with your package manager. Using __pnpm__:
+   - Install packages with your package manager.
    - Run the Next.js app. Using __pnpm__:
 ```shell
 # Install packages
