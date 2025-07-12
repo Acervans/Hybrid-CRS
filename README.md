@@ -15,7 +15,7 @@ Master's Thesis project, a platform to create Hybrid Conversational Recommender 
 4. All set! The frontend can be accessed at http://localhost:3001.
 
 ### Developer Setup
-1. In `hybrid-crs/`, install Python dependencies in __requirements-dev.txt__. Using __pip__:
+1. Go to `hybrid-crs/`, install Python dependencies in __requirements-dev.txt__. Using __pip__:
 ```shell
 pip install -r requirements-dev.txt
 ```
@@ -23,11 +23,11 @@ pip install -r requirements-dev.txt
 ```shell
 pre-commit install
 ```
-3. To manually start the backend server (API service in Docker Compose), go to `hybrid-crs/` and start the FastAPI server:
+3. To manually start the backend server (API service in Docker Compose), run the FastAPI server:
 ```shell
 fastapi dev api.py
 ```
-4. To manually start the frontend server (UI service in Docker Compose), go to `hybrid-crs/frontend/hybrid-crs-ui/`, install packages and start the Next.js app with your package manager. Using __pnpm__:
+4. To manually start the frontend server (UI service in Docker Compose), go to `frontend/hybrid-crs-ui/`, install packages and run the Next.js app with your package manager. Using __pnpm__:
 ```shell
 pnpm install
 pnpm dev
