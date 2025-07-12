@@ -23,11 +23,16 @@ pip install -r requirements-dev.txt
 ```shell
 pre-commit install
 ```
-3. To manually start the backend server (API service in Docker Compose), go to `hybrid-crs/` and run the FastAPI server:
+3. To manually start the backend server (API service in Docker Compose):
+   - Go to `hybrid-crs/`.
+   - Run the FastAPI server:
 ```shell
 fastapi dev api.py
 ```
-4. To manually start the frontend server (UI service in Docker Compose), go to `hybrid-crs/frontend/hybrid-crs-ui/`, install packages and run the Next.js app with your package manager. Using __pnpm__:
+4. To manually start the frontend server (UI service in Docker Compose):
+   - Go to `hybrid-crs/frontend/hybrid-crs-ui/`.
+   - Install packages with your package manager.
+   - Run the Next.js app. Using __pnpm__:
 ```shell
 pnpm install
 pnpm dev
