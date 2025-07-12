@@ -403,7 +403,7 @@ async def ollama_api_proxy(
     # Reverse proxy for Ollama API
     url: str = f"{OLLAMA_API_URL}/api/{endpoint}"
 
-    # Perform Web Search with DuckDuckGo
+    # Perform Web Search with DDGS
     if request.headers.get("websearch") == "true":
         web_results = await web_search(body["messages"][-1]["content"])
         body["messages"][-1][
