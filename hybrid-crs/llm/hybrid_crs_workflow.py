@@ -118,8 +118,8 @@ You have a set of tools to achieve this. You MUST use them as described:
 Here are the item features you can ask about, along with their possible values. Do NOT make up any feature. You MUST map the user's input to one of these exact values when using tools.
 {schema}
 
+If the user says "<<FEEDBACK_RECEIVED_N>>", just CONTINUE ASKING FOR PREFERENCES, as the user ALREADY RECEIVED RECOMMENDATIONS and ALREADY SENT FEEDBACK.
 Start the conversation by introducing yourself and asking what the user is looking for.
-If the user says "<<FEEDBACK_RECEIVED_N>>", it means the user ALREADY RECEIVED N RECOMMENDATIONS and ALREADY SENT FEEDBACK, so just continue gathering preferences.
 """
 )
 
@@ -320,9 +320,9 @@ class HybridCRSWorkflow(Workflow):
                         )
                     correction_response = await llm.astructured_predict(
                         output_cls=SelectedValue,
-                        prompt=correction_prompt.format(
-                            update_value=update_value, valid_values=valid_values
-                        ),
+                        prompt=correction_prompt,
+                        update_value=update_value,
+                        valid_values=valid_values,
                     )
                     corrected_value = correction_response.value.strip()
 
