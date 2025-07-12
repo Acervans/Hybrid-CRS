@@ -27,7 +27,7 @@ pre-commit install
 ```shell
 fastapi dev api.py
 ```
-1. To manually start the frontend server (UI service in Docker Compose), go to `frontend/hybrid-crs-ui/`, install packages and start the Next.js app with your package manager. Using __pnpm__:
+4. To manually start the frontend server (UI service in Docker Compose), go to `frontend/hybrid-crs-ui/`, install packages and start the Next.js app with your package manager. Using __pnpm__:
 ```shell
 pnpm install
 pnpm dev
