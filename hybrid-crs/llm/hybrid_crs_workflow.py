@@ -452,7 +452,7 @@ class HybridCRSWorkflow(Workflow):
                 dataset=self.recbole_dataset,
                 cutoff=EXPERT_CUTOFF,
             )
-            for _, item_id in expert_recs:
+            for _score, item_id in expert_recs:
                 if item_id not in final_recs and item_id not in self.seen:
                     item_node = self.falkordb_rec.g.query(
                         "MATCH (i:Item {item_id: $item_id}) RETURN i",
@@ -505,7 +505,7 @@ class HybridCRSWorkflow(Workflow):
 
         return await llm.acomplete(
             explanation_prompt.format(
-                preferences=json.dumps(profile.context_prefs, indent=2),
+                preferences=profile.context_prefs,
                 item_name=item.properties.get("name", item.properties["item_id"]),
                 item_properties={
                     k: v
@@ -726,7 +726,7 @@ class HybridCRSWorkflow(Workflow):
                 instruction=(
                     f"The user just received some recommendations from you, and gave feedback for {item_ids} items.\n"
                     "Their current preferences are:\n"
-                    f"{json.dumps(profile.context_prefs, indent=2)}\n\n"
+                    f"{profile.context_prefs}\n\n"
                     "CONTINUE THE SESSION."
                 ),
             )
