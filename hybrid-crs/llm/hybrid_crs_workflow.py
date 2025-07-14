@@ -326,22 +326,30 @@ class HybridCRSWorkflow(Workflow):
                 found = next((v for v in valid_values if str(v).lower() == lower), None)
 
                 if not found:
-                    if self._verbose:
-                        print(
-                            f"'{update_value}' not an exact match for '{context}'. Attempting to correct with LLM..."
-                        )
-                    correction_response = await llm.astructured_predict(
-                        output_cls=SelectedValue,
-                        prompt=correction_prompt,
-                        update_value=update_value,
-                        valid_values=valid_values,
-                    )
-                    corrected_value = correction_response.value.strip()
-
-                    if corrected_value != "None" and corrected_value in valid_values:
-                        final_values.append(corrected_value)
+                    try:
                         if self._verbose:
-                            print(f"Corrected '{update_value}' to '{corrected_value}'.")
+                            print(
+                                f"'{update_value}' not an exact match for '{context}'. Attempting to correct with LLM..."
+                            )
+                        correction_response = await llm.astructured_predict(
+                            output_cls=SelectedValue,
+                            prompt=correction_prompt,
+                            update_value=update_value,
+                            valid_values=valid_values,
+                        )
+                        corrected_value = correction_response.value.strip()
+
+                        if (
+                            corrected_value != "None"
+                            and corrected_value in valid_values
+                        ):
+                            final_values.append(corrected_value)
+                            if self._verbose:
+                                print(
+                                    f"Corrected '{update_value}' to '{corrected_value}'."
+                                )
+                    except:
+                        continue
                 else:
                     final_values.append(found)
 
