@@ -227,31 +227,47 @@ class HybridCRSWorkflow(Workflow):
             clear=False,
         )
 
-        recbole_model_dir = model_dir or os.path.join("..", "recsys", "saved")
-        recbole_model_path = os.path.join(recbole_model_dir, f"{dataset_name}.pth")
-        recbole_dataset_path = os.path.join(
-            recbole_model_dir, f"{dataset_name}-Dataset.pth"
-        )
+        self.falkordb_rec.create_user(self.user_id)
+        self.seen = set(self.falkordb_rec.get_items_by_user(self.user_id))
+        self.is_new_user = len(self.seen) < MIN_ITEMS_CF
+
         if self._verbose:
-            print(f"Loading RecBole model from {recbole_model_path}...")
-        if os.path.exists(recbole_model_path):
-            self.recbole_config, self.recbole_model, self.recbole_dataset, _, _, _ = (
-                load_data_and_model(
+            print(
+                f"\nUser '{self.user_id}' is {'new' if self.is_new_user else 'existing'}."
+            )
+
+        self.use_expert = False
+        if not self.is_new_user:
+            recbole_model_dir = model_dir or os.path.join("..", "recsys", "saved")
+            recbole_model_path = os.path.join(recbole_model_dir, f"{dataset_name}.pth")
+            recbole_dataset_path = os.path.join(
+                recbole_model_dir, f"{dataset_name}-Dataset.pth"
+            )
+            if os.path.exists(recbole_model_path):
+                if self._verbose:
+                    print(f"Loading RecBole model from {recbole_model_path}...")
+
+                (
+                    self.recbole_config,
+                    self.recbole_model,
+                    self.recbole_dataset,
+                    _,
+                    _,
+                    _,
+                ) = load_data_and_model(
                     load_model=recbole_model_path,
                     update_config={
                         "dataset_save_path": recbole_dataset_path,
                     },
                 )
-            )
-            self.expert_model_loaded = True
-            if self._verbose:
-                print("RecBole model loaded successfully.")
-        else:
-            self.expert_model_loaded = False
-            if self._verbose:
-                print(
-                    f"Warning: RecBole model not found at {recbole_model_path}. Expert recommendations disabled."
-                )
+                self.use_expert = True
+                if self._verbose:
+                    print("RecBole model loaded successfully.")
+            else:
+                if self._verbose:
+                    print(
+                        f"Warning: RecBole model not found at {recbole_model_path}. Expert recommendations disabled."
+                    )
 
         self.tools = self._get_tools()
 
@@ -298,7 +314,7 @@ class HybridCRSWorkflow(Workflow):
     ) -> ToolOutput:
         """Updates the user's profile with a new contextual preference, with validation."""
         item_schema = self.schema_with_values.get("Item Features", {})
-        feature_info = item_schema.get(context)
+        feature_info = item_schema.get(context, {})
         final_values = []
 
         if feature_info and isinstance(feature_info.get("values"), list):
@@ -413,8 +429,7 @@ class HybridCRSWorkflow(Workflow):
         self.seen.update(item_ids)
         await update_dataset(self.inter_path, self.user_id, item_ids, ratings)
 
-        is_new_user = len(self.seen) < MIN_ITEMS_CF
-        await ctx.store.set("is_new_user", is_new_user)
+        self.is_new_user = len(self.seen) < MIN_ITEMS_CF
 
         return ToolOutput(
             tool_name="add_user_item_feedback",
@@ -426,7 +441,6 @@ class HybridCRSWorkflow(Workflow):
     async def get_recommendations(self, ctx: Context) -> ToolOutput:
         """Gets personalized recommendations based on the user's current profile."""
         profile: UserProfile = await ctx.store.get("profile")
-        is_new_user: bool = await ctx.store.get("is_new_user", True)
         item_props = {
             key: (
                 [k for k, v in pref.data.items() if v]
@@ -448,7 +462,7 @@ class HybridCRSWorkflow(Workflow):
             self.falkordb_rec.recommend_contextual(
                 user_id=self.user_id, item_props=item_props, top_n=falkor_top_n
             )
-            if is_new_user
+            if self.is_new_user
             else self.falkordb_rec.recommend_hybrid(
                 user_id=self.user_id, item_props=item_props, top_n=falkor_top_n, k=10
             )
@@ -478,7 +492,7 @@ class HybridCRSWorkflow(Workflow):
                     break
 
         elif self._verbose:
-            if is_new_user:
+            if self.is_new_user:
                 print("Strategy: Contextual recommendations using FalkorDB.")
             else:
                 print("Strategy: Contextual + CF recommendations using FalkorDB.")
@@ -588,14 +602,6 @@ class HybridCRSWorkflow(Workflow):
 
         await ctx.store.set("memory", memory)
         await ctx.store.set("profile", UserProfile(user_id=self.user_id))
-        self.falkordb_rec.create_user(self.user_id)
-        self.seen = set(self.falkordb_rec.get_items_by_user(self.user_id))
-        is_new_user = len(self.seen) < MIN_ITEMS_CF
-        await ctx.store.set("is_new_user", is_new_user)
-        self.use_expert = self.expert_model_loaded and not is_new_user
-
-        if self._verbose:
-            print(f"\nUser '{self.user_id}' is {'new' if is_new_user else 'existing'}.")
 
         return InputRequiredEvent(from_event=ev.__repr_name__())
 
@@ -751,8 +757,7 @@ class HybridCRSWorkflow(Workflow):
             ctx.write_event_to_stream(StreamEvent(delta=response.delta or ""))
         memory.put(ChatMessage(role=MessageRole.ASSISTANT, content=response.text))
 
-        is_new_user = len(self.seen) < MIN_ITEMS_CF
-        await ctx.store.set("is_new_user", is_new_user)
+        self.is_new_user = len(self.seen) < MIN_ITEMS_CF
         return InputRequiredEvent(from_event=ev.__repr_name__())
 
     @step
