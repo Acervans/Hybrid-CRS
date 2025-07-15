@@ -529,9 +529,8 @@ class HybridCRSWorkflow(Workflow):
             rating = float(explanations[-1])
         except (IndexError, ValueError):
             rating = None
-        item.properties["falkordb_rating"] = rating
 
-        return await llm.acomplete(
+        llm_explanation = await llm.acomplete(
             explanation_prompt.format(
                 preferences=profile.context_prefs,
                 item_name=item.properties.get("name", item.properties["item_id"]),
@@ -546,6 +545,8 @@ class HybridCRSWorkflow(Workflow):
                 explanations="\n".join(f"- {e}" for e in explanations),
             )
         )
+        item.properties["falkordb_rating"] = rating
+        return llm_explanation
 
     # --- Workflow Steps ---
     @step
