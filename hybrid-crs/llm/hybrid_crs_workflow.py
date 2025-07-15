@@ -215,7 +215,7 @@ class HybridCRSWorkflow(Workflow):
         ), "LLM must support function calling."
 
         self.inter_path = os.path.join(dataset_dir, f"{self.dataset_name}.inter")
-        self.schema_with_values: Dict = {}
+        self.item_schema: Dict = {}
 
         if self._verbose:
             print("Connecting to FalkorDB...")
@@ -313,8 +313,7 @@ class HybridCRSWorkflow(Workflow):
         delete: Annotated[bool, "If True, the preferences will be deleted"] = False,
     ) -> ToolOutput:
         """Updates the user's profile with a new contextual preference, with validation."""
-        item_schema = self.schema_with_values.get("Item Features", {})
-        feature_info = item_schema.get(context, {})
+        feature_info = self.item_schema.get(context, {})
         final_values = []
 
         if feature_info and isinstance(feature_info.get("values"), list):
@@ -537,9 +536,12 @@ class HybridCRSWorkflow(Workflow):
                 preferences=profile.context_prefs,
                 item_name=item.properties.get("name", item.properties["item_id"]),
                 item_properties={
-                    k: v
-                    for k, v in item.properties.items()
-                    if k not in ("item_id", "name", "pagerank")
+                    "rating": rating,
+                    **{
+                        k: v
+                        for k, v in item.properties.items()
+                        if k not in ("item_id", "name", "pagerank")
+                    },
                 },
                 explanations="\n".join(f"- {e}" for e in explanations),
             )
@@ -556,7 +558,6 @@ class HybridCRSWorkflow(Workflow):
         item_features_key = "Item Node Features"
         if item_features_key in self.falkordb_rec.schema:
             item_feats = self.falkordb_rec.schema[item_features_key]
-            item_schema_data = {}
             for feat, feat_type in item_feats.items():
                 should_fetch_values = feat_type.endswith("token") or (
                     feat_type.endswith("token_seq") and feat == "category"
@@ -565,7 +566,7 @@ class HybridCRSWorkflow(Workflow):
                     possible_values = self.falkordb_rec.get_unique_feat_values(
                         "Item", feat
                     )
-                    item_schema_data[feat] = {
+                    self.item_schema[feat] = {
                         "type": feat_type,
                         "values": (
                             sorted(str(x).strip() for x in possible_values)
@@ -574,8 +575,7 @@ class HybridCRSWorkflow(Workflow):
                         ),
                     }
                 else:
-                    item_schema_data[feat] = {"type": feat_type, "values": "Any"}
-            self.schema_with_values["Item Features"] = item_schema_data
+                    self.item_schema[feat] = {"type": feat_type, "values": "Any"}
 
         memory = ChatMemoryBuffer.from_defaults(
             chat_history=[
@@ -585,7 +585,7 @@ class HybridCRSWorkflow(Workflow):
                         agent_name=self.agent_name,
                         dataset_name=self.dataset_name,
                         description=self.description,
-                        schema=json.dumps(self.schema_with_values, indent=2),
+                        schema=json.dumps(self.item_schema, indent=2),
                         instruction="Start the conversation by introducing yourself and asking what the user is looking for.",
                     ),
                 )
@@ -744,7 +744,7 @@ class HybridCRSWorkflow(Workflow):
                 agent_name=self.agent_name,
                 dataset_name=self.dataset_name,
                 description=self.description,
-                schema=json.dumps(self.schema_with_values, indent=2),
+                schema=json.dumps(self.item_schema, indent=2),
                 instruction=(
                     f"The user just received some recommendations from you, and gave feedback for {len(item_ids)} items.\n"
                     "Their current preferences are:\n"
