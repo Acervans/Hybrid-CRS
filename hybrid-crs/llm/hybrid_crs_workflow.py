@@ -233,7 +233,7 @@ class HybridCRSWorkflow(Workflow):
 
         if self._verbose:
             print(
-                f"\nUser '{self.user_id}' is {'new' if self.is_new_user else 'existing'}."
+                f"User '{self.user_id}' is {'new' if self.is_new_user else 'existing'}."
             )
 
         self.use_expert = False
