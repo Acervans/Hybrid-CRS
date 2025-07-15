@@ -554,7 +554,7 @@ class HybridCRSWorkflow(Workflow):
                     item_schema_data[feat] = {
                         "type": feat_type,
                         "values": (
-                            sorted(possible_values)
+                            sorted(str(x).strip() for x in possible_values)
                             if len(possible_values) <= 200
                             else f"Too many to list ({len(possible_values)})."
                         ),
