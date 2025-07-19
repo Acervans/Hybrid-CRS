@@ -651,7 +651,6 @@ async def create_agent(
                     ),
                     delimiter=sniff.delimiter,
                     quotechar=sniff.quote_char or '"',
-                    lineterminator=sniff.newline_str,
                     skiprows=1 if sniff.has_header else None,
                     names=headers,
                     on_bad_lines="warn",
