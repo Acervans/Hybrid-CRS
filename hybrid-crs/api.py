@@ -675,7 +675,6 @@ async def create_agent(
                     save_path,
                     sep=sniff.delimiter,
                     quotechar=sniff.quote_char or '"',
-                    lineterminator=sniff.newline_str,
                     index=False,
                     header=True,
                 )
