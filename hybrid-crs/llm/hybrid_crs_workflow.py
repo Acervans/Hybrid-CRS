@@ -99,7 +99,7 @@ async def update_dataset(
     except FileNotFoundError:
         print(f"Interaction file not found at {inter_path}")
     except Exception as e:
-        print(f"An error occurred during dataset update")
+        print(f"An error occurred during dataset update: {e}")
         raise e
 
 
