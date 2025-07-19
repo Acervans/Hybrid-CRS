@@ -563,17 +563,3 @@ def hyperparam_grid_search(
 
     print("Test result:", test_result)
     return best_params, test_result
-
-
-if __name__ == "__main__":
-    best_params, test_scores = hyperparam_grid_search(
-        model="EASE",
-        config_file="config/generic.yaml",
-        config_dict={
-            "save_dataset": True,
-            "dataset_save_path": "ml-100k-Dataset.pth",
-        },
-        param_grid={"reg_weight": [1.0, 10.0, 100.0, 250.0, 500.0, 1000.0]},
-        dataset_name="ml-100k",
-        save_best_model_path="saved/ml-100k.pth",
-    )
