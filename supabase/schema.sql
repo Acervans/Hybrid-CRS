@@ -69,11 +69,13 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
 CREATE OR REPLACE FUNCTION "public"."increment_new_sessions"("agent_id" integer) RETURNS "void"
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
-    AS $_$BEGIN
+    AS $$
+BEGIN
   UPDATE public."RecommenderAgent"
   SET new_sessions = new_sessions + 1
-  WHERE "RecommenderAgent".agent_id = $1;
-END;$_$;
+  WHERE "RecommenderAgent".agent_id = agent_id;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."increment_new_sessions"("agent_id" integer) OWNER TO "postgres";
