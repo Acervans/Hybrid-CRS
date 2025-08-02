@@ -73,7 +73,7 @@ CREATE OR REPLACE FUNCTION "public"."increment_new_sessions"("agent_id" integer)
 BEGIN
   UPDATE public."RecommenderAgent"
   SET new_sessions = new_sessions + 1
-  WHERE "RecommenderAgent".agent_id = agent_id;
+  WHERE "RecommenderAgent".agent_id = increment_new_sessions.agent_id;
 END;
 $$;
 
