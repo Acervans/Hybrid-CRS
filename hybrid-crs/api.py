@@ -980,7 +980,7 @@ async def start_workflow(
 
     try:
         # Increment session count
-        supabase.rpc("increment_new_sessions", {"agent_id": agent_id})
+        supabase.rpc("increment_new_sessions", {"agent_id": agent_id}).execute()
 
         dataset_name = get_dataset_name(payload.dataset_name, agent_id)
         dataset_path = get_dataset_path(dataset_name, True)
