@@ -35,7 +35,7 @@ from contextlib import asynccontextmanager
 from falkordb import FalkorDB
 from redis.exceptions import ResponseError
 
-from supabase import create_client, Client
+from supabase import create_client, Client, AuthError
 
 from llama_index.core import Settings
 from llama_index.llms.ollama import Ollama
@@ -578,10 +578,10 @@ async def create_agent(
             .single()
             .execute()
         )
-        metadata = response.data
+        data = response.data
 
         # Author validation
-        assert request.state.jwt["sub"] == metadata["user_id"]
+        assert request.state.jwt["sub"] == data["user_id"]
 
         # Request validation
         agent_config_obj: AgentConfig = AgentConfig.model_validate_json(agent_config)
@@ -966,26 +966,46 @@ async def start_workflow(
     - Returns:
         - StreamingResponse: stream of workflow events
     """
-    workflow_id = str(uuid.uuid4())
     agent_id = payload.agent_id
+    user_id = payload.user_id
 
     def archive_session():
         # Set chat session as archived
         (
             supabase.table("ChatHistory")
             .update({"archived": True})
+            .eq("user_id", user_id)
             .eq("agent_id", agent_id)
             .execute()
+        )
+
+    try:
+        # Visibility validation
+        response = (
+            supabase.table("RecommenderAgent")
+            .select("public", "user_id")
+            .eq("agent_id", agent_id)
+            .single()
+            .execute()
+        )
+        data = response.data
+
+        assert data["public"] is True or data["user_id"] == user_id
+    except (AssertionError, AuthError):
+        raise HTTPException(
+            status_code=403, detail="You don't have access to this agent"
         )
 
     try:
         # Increment session count
         supabase.rpc("increment_new_sessions", {"agent_id": agent_id}).execute()
 
+        # Initialize workflow
+        workflow_id = str(uuid.uuid4())
         dataset_name = get_dataset_name(payload.dataset_name, agent_id)
         dataset_path = get_dataset_path(dataset_name, True)
         wf = HybridCRSWorkflow(
-            user_id=payload.user_id,
+            user_id=user_id,
             agent_name=payload.agent_name,
             dataset_name=dataset_name,
             dataset_dir=dataset_path,
@@ -1040,7 +1060,9 @@ async def start_workflow(
 
     except Exception as e:
         archive_session()
-        raise HTTPException(status_code=500, detail=f"Error starting workflow: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error during workflow execution: {e}"
+        )
 
 
 @app.post("/send-user-response")
