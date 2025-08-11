@@ -578,10 +578,10 @@ async def create_agent(
             .single()
             .execute()
         )
-        data = response.data
+        metadata = response.data
 
         # Author validation
-        assert request.state.jwt["sub"] == data["user_id"]
+        assert request.state.jwt["sub"] == metadata["user_id"]
 
         # Request validation
         agent_config_obj: AgentConfig = AgentConfig.model_validate_json(agent_config)
@@ -988,9 +988,9 @@ async def start_workflow(
             .single()
             .execute()
         )
-        data = response.data
+        metadata = response.data
 
-        assert data["public"] is True or data["user_id"] == user_id
+        assert metadata["public"] is True or metadata["user_id"] == user_id
     except (AssertionError, AuthError):
         raise HTTPException(
             status_code=403, detail="You don't have access to this agent"
