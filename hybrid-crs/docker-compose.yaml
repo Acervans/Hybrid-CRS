@@ -25,10 +25,13 @@ services:
       - ./data_processing/datasets:/api/data_processing/datasets
       - ./recsys/saved:/api/recsys/saved
 
+    runtime: nvidia
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities:
+                - gpu
