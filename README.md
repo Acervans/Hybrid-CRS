@@ -8,13 +8,18 @@ Deployed at https://hybrid-crs.vercel.app, with local backend proxy using [zrok]
 
 
 ## Setup
-1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/). You'll also need to configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/ai-enterprise/deployment/vmware/latest/docker.html) to work with with `Docker`.
-2. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
-3. In `hybrid-crs/`:
+1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/). 
+2. Configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/ai-enterprise/deployment/vmware/latest/docker.html) to work with with `Docker`:
+```shell
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+4. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
+5. In `hybrid-crs/`:
    - Create a __.env__ file using __.env.example__ as sample. Replace with Supabase JWT secret, service role key and URL.
    - In `frontend/hybrid-crs-ui/`, create a __.env.local__ file using __.env.local.example__ as sample. Replace with Supabase anonymous key and URL.
    - Run `docker compose up` to pull and build all the images for the project, and start the Ollama, FalkorDB, API and UI services.
-4. All set! The frontend can be accessed at http://localhost:3001.
+6. All set! The frontend can be accessed at http://localhost:3001.
    - Once signed up and authenticated, use the LLM Selector (top right), and pull the `qwen2.5:3b` model, required for the project.
 
 ### Developer Setup
