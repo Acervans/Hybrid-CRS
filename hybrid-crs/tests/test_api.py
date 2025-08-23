@@ -83,17 +83,8 @@ def test_infer_delimiter():
 
 
 def test_create_agent(mocker):
-    # Mock Supabase auth/user validation
-    mock_supabase = mocker.patch("api.supabase")
-    mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {
-        "user_id": "mock_user"
-    }
-    mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [
-        {}
-    ]
-    mock_supabase.table.return_value.delete.return_value.eq.return_value.execute.return_value = (
-        {}
-    )
+    # Mock Supabase
+    mocker.patch("api.supabase")
 
     # Mock recommender logic
     mocker.patch("api.FalkorDBRecommender")
@@ -141,9 +132,6 @@ def test_create_agent(mocker):
 
 
 def test_chat_history_endpoints(mocker):
-    # Patch JWT decode to simulate auth
-    mocker.patch("api.jwt.decode", return_value={"sub": JWT_SUB})
-
     # Patch all FalkorDBChatHistory methods
     mock_store = mocker.patch("api.FalkorDBChatHistory.store_chat")
     mock_append = mocker.patch("api.FalkorDBChatHistory.append_message")

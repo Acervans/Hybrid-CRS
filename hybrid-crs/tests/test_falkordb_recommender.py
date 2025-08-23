@@ -12,8 +12,7 @@ from recsys.falkordb_recommender import FalkorDBRecommender
 
 # Mock test dataset directory
 @pytest.fixture(scope="module")
-def test_data_dir():
-    """Creates a temporary directory with dummy CSV files for testing."""
+def mock_data_dir():
     dir_path = "./tmp"
     os.makedirs(dir_path, exist_ok=True)
 
@@ -54,11 +53,10 @@ def test_data_dir():
 
 # Mock FalkorDBRecommender graph
 @pytest.fixture(scope="module")
-def recommender(test_data_dir):
-    """Initializes the FalkorDBRecommender with test data and cleans up the graph."""
+def recommender(mock_data_dir):
     rec = FalkorDBRecommender(
         dataset_name="test_rec",
-        dataset_dir=test_data_dir,
+        dataset_dir=mock_data_dir,
         graph_name="test-recommender-graph",
         clear=True,
     )
@@ -68,7 +66,6 @@ def recommender(test_data_dir):
 
 
 def test_initialization(recommender):
-    """Test if the graph is created and data is ingested correctly."""
     assert recommender.graph_name == "test-recommender-graph"
 
     user_count = recommender.g.query("MATCH (n:User) RETURN count(n)").result_set[0][0]
@@ -83,7 +80,6 @@ def test_initialization(recommender):
 
 
 def test_create_user(recommender):
-    """Test creating a new user."""
     new_user_id = "4"
     created_id = recommender.create_user(new_user_id)
     assert created_id == new_user_id
@@ -94,7 +90,6 @@ def test_create_user(recommender):
 
 
 def test_add_user_properties(recommender):
-    """Test adding properties to an existing user."""
     recommender.add_user_properties("1", {"country": "USA"})
     props = recommender.g.query(
         "MATCH (u:User {user_id: '1'}) RETURN u.country"
@@ -103,7 +98,6 @@ def test_add_user_properties(recommender):
 
 
 def test_add_user_interactions(recommender):
-    """Test adding new interactions for a user."""
     user_id = "1"
     initial_interactions = recommender.get_items_by_user(user_id)
     assert "104" not in initial_interactions
@@ -115,7 +109,6 @@ def test_add_user_interactions(recommender):
 
 
 def test_get_unique_feat_values(recommender):
-    """Test retrieving unique values for a feature."""
     # Test for a sequence feature
     categories = recommender.get_unique_feat_values("Item", "category")
     expected_categories = [
@@ -135,19 +128,16 @@ def test_get_unique_feat_values(recommender):
 
 
 def test_get_items_by_user(recommender):
-    """Test fetching items rated by a specific user."""
     items = recommender.get_items_by_user("2")
     assert set(items) == {"101", "103"}
 
 
 def test_get_users_by_item(recommender):
-    """Test fetching users who rated a specific item."""
     users = recommender.get_users_by_item("101")
     assert set(users) == {"1", "2"}
 
 
 def test_recommend_contextual(recommender):
-    """Test contextual recommendations."""
     recs = recommender.recommend_contextual(
         user_id="3",  # User 3 has not seen item 101 (Comedy)
         item_props={"category": "Comedy"},
@@ -160,7 +150,6 @@ def test_recommend_contextual(recommender):
 
 
 def test_recommend_cf(recommender):
-    """Test collaborative filtering recommendations."""
     # User 1 and 2 are similar (both rated item 101).
     # User 2 liked item 103, which user 1 has not seen.
     recs = recommender.recommend_cf(user_id="1", k=1, top_n=5)
@@ -170,7 +159,6 @@ def test_recommend_cf(recommender):
 
 
 def test_recommend_hybrid(recommender):
-    """Test hybrid recommendations."""
     recs = recommender.recommend_hybrid(
         user_id="1", item_props={"category": "Comedy"}, k=1, top_n=5
     )
@@ -181,7 +169,6 @@ def test_recommend_hybrid(recommender):
 
 
 def test_explain_blackbox_recs(recommender):
-    """Test explanation generation for a recommendation."""
     # Explain why item '101' might be recommended to user '3'
     # User '3' liked '102' (Adventure Children Fantasy) and '104' (Comedy Drama Romance)
     # Item '101' is (Animation Children Comedy)
