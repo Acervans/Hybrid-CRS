@@ -11,13 +11,16 @@ services:
     tty: true
     restart: unless-stopped
 
+    runtime: nvidia
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities:
+                - gpu
 
   falkordb:
     image: falkordb/falkordb:latest

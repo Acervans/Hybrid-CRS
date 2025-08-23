@@ -6,20 +6,28 @@ Deployed at https://hybrid-crs.vercel.app, with local backend proxy using [zrok]
 - Frontend Repository: [Hybrid-CRS-Frontend](https://github.com/Acervans/Hybrid-CRS-Frontend)
 - Thesis Repository: [Hybrid-CRS-Thesis](https://github.com/Acervans/Hybrid-CRS-Thesis)
 
+Backend Tech Stack:
+- `FastAPI` as the RESTful API entrypoint
+- `FalkorDB` as the graph store for recommendation data and chat history
+- `RecBole` as the recommendation framework for expert models
+- `Ollama` as the LLM server
+- `LlamaIndex` as the agent orchestrator
+- `Supabase` as the cloud-based metadata database
 
 ## Setup
-1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/). 
-2. Configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/ai-enterprise/deployment/vmware/latest/docker.html) to work with with `Docker`:
+1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/).
+2. Configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#configuring-docker) to work with with `Docker`:
+   - If you want to run the `Ollama` service with AMD GPUs or CPU only, check the [Docker image](https://hub.docker.com/r/ollama/ollama#ollama-docker-image).
 ```shell
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
-4. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
-5. In `hybrid-crs/`:
+1. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
+2. In `hybrid-crs/`:
    - Create a __.env__ file using __.env.example__ as sample. Replace with Supabase JWT secret, service role key and URL.
    - In `frontend/hybrid-crs-ui/`, create a __.env.local__ file using __.env.local.example__ as sample. Replace with Supabase anonymous key and URL.
    - Run `docker compose up` to pull and build all the images for the project, and start the Ollama, FalkorDB, API and UI services.
-6. All set! The frontend can be accessed at http://localhost:3001.
+3. All set! The frontend can be accessed at http://localhost:3001.
    - Once signed up and authenticated, use the LLM Selector (top right), and pull the `qwen2.5:3b` model, required for the project.
 
 ### Developer Setup
