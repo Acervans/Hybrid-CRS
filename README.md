@@ -8,7 +8,7 @@ Deployed at https://hybrid-crs.vercel.app, with local backend proxy using [zrok]
 
 
 ## Setup
-1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/).
+1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/). You'll also need to configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/ai-enterprise/deployment/vmware/latest/docker.html) to work with with `Docker`.
 2. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
 3. In `hybrid-crs/`:
    - Create a __.env__ file using __.env.example__ as sample. Replace with Supabase JWT secret, service role key and URL.
