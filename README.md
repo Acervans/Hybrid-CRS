@@ -16,7 +16,7 @@ Backend Tech Stack:
 
 ## Setup
 1. Install [`Docker`](https://www.docker.com/get-started/) and [`Docker Compose`](https://docs.docker.com/compose/).
-2. Configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#configuring-docker) to work with with `Docker`:
+2. Configure the [`NVIDIA Container Runtime`](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#configuring-docker) to work with `Docker`:
    - If you want to run the `Ollama` service with AMD GPUs or CPU only, check the [Docker image](https://hub.docker.com/r/ollama/ollama#ollama-docker-image).
 ```shell
 sudo nvidia-ctk runtime configure --runtime=docker
