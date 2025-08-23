@@ -22,12 +22,12 @@ Backend Tech Stack:
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
-1. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
-2. In `hybrid-crs/`:
+3. Create a [`Supabase`](https://supabase.com/) project using the __roles.sql__ and __schema.sql__ files in `supabase/`, following [this guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore#restore-backup-using-cli) (without __data.sql__).
+4. In `hybrid-crs/`:
    - Create a __.env__ file using __.env.example__ as sample. Replace with Supabase JWT secret, service role key and URL.
    - In `frontend/hybrid-crs-ui/`, create a __.env.local__ file using __.env.local.example__ as sample. Replace with Supabase anonymous key and URL.
    - Run `docker compose up` to pull and build all the images for the project, and start the Ollama, FalkorDB, API and UI services.
-3. All set! The frontend can be accessed at http://localhost:3001.
+5. All set! The frontend can be accessed at http://localhost:3001.
    - Once signed up and authenticated, use the LLM Selector (top right), and pull the `qwen2.5:3b` model, required for the project.
 
 ### Developer Setup
