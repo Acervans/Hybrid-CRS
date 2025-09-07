@@ -21,7 +21,6 @@ pymupdf==1.26.4
 pytest
 pytest-mock
 recbole==1.2.0
-redis==5.2.1
 scipy==1.15.3
 supabase==2.18.1
 torch==2.5.1

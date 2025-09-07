@@ -17,7 +17,6 @@ pydantic==2.11.7
 PyJWT==2.10.1
 pymupdf==1.26.4
 recbole==1.2.0
-redis==5.2.1
 scipy==1.15.3
 supabase==2.18.1
 torch==2.5.1
